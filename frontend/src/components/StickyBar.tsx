@@ -92,10 +92,12 @@ export function StickyBar({
           Mozzy
         </span>
         <span className="hidden w-px bg-[#ECE6DA]/40 sm:block" style={{ height: `${lerp(40, 30, p)}px` }} />
-        <span className="hidden text-[11px] uppercase leading-relaxed tracking-[0.18em] sm:block" style={TYPE}>
-          Detect locally.
-          <br />
-          Prevent globally.
+        {/* One line. Below 1280px wide it fades out as the counters arrive, so they never collide. */}
+        <span
+          className="hidden text-[11px] whitespace-nowrap uppercase tracking-[0.18em] sm:block max-xl:opacity-[var(--tag)]"
+          style={{ ...TYPE, ["--tag" as string]: String(1 - stats) }}
+        >
+          Detect locally. Prevent globally.
         </span>
 
         {/* Counters: right-aligned, vertically centred */}

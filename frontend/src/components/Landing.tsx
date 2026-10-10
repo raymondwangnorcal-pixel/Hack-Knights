@@ -86,7 +86,7 @@ function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => vo
     <Intro onPick={pick} />
     <main
       id="start"
-      className={`flex min-h-screen flex-1 flex-col transition-colors duration-500 ${
+      className={`flex min-h-screen flex-1 scroll-mt-16 flex-col transition-colors duration-500 ${
         dark ? "bg-black text-white" : "bg-white text-black"
       }`}
     >

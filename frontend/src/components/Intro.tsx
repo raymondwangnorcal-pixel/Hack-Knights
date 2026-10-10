@@ -1,13 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { RollingNumber } from "@/components/RollingNumber";
 import { useYearClock } from "@/lib/useYearClock";
 import { CASES_PER_SECOND, DISEASES, SECONDS_PER_DEATH, SECONDS_PER_YEAR } from "@/lib/burden";
 import { IntroMap } from "@/components/IntroMap";
 import { GlowGrid } from "@/components/GlowGrid";
+import { BAR_SPACER, StickyBar } from "@/components/StickyBar";
 
 // Full-screen intro: a printed-poster take on the counters. Two live totals since Jan 1,
 // each over a dot-matrix world map shaded where mosquito-borne disease concentrates.
@@ -20,6 +20,9 @@ const INK = "#ECE6DA"; // paper-coloured text on the dark ground
 const ORANGE = "#F07636";
 const RED = "#E0434A";
 const GLOW: [string, string] = [ORANGE, RED];
+const INFECTED_ROLL = { duration: 600, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" };
+// Death digits that carry over (…9 → …0) turn with a slow, settling roll; the last digit creeps.
+const DEATH_ROLL = { duration: 1500, easing: "cubic-bezier(0.45, 0, 0.25, 1.15)" };
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 
@@ -63,6 +66,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
   const cases = DISEASES.reduce((s, d) => s + d.cases, 0);
   const infected = useJitteredCount(cases);
   const deaths = DISEASES.reduce((s, d) => s + d.deaths, 0);
+  const deathFraction = clock === null ? undefined : ((clock.secs / SECONDS_PER_YEAR) * deaths) % 1;
 
   return (
     <section
@@ -71,37 +75,18 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
       style={{ backgroundColor: "#13110F", backgroundImage: PAPER, color: INK }}
     >
       <GlowGrid colors={GLOW} />
+      <StickyBar
+        trackId="intro-first-screen"
+        onPick={onPick}
+        counters={[
+          { value: infected, word: "Infected", color: ORANGE, roll: INFECTED_ROLL },
+          { value: perYear(deaths, clock), word: "Dead", color: RED, fraction: deathFraction, roll: DEATH_ROLL },
+        ]}
+      />
       {/* First screen: exactly one window tall on desktop, so the photo strip sits on the bottom edge */}
-      <div className="flex flex-col md:h-[100svh] md:min-h-[640px]">
-      {/* Masthead */}
-      <header className="relative z-10 flex flex-wrap items-center justify-between gap-4 border-b border-[#ECE6DA]/20 px-6 py-3 sm:px-10">
-        <div className="flex items-center gap-5">
-          <span className="text-5xl leading-none tracking-wide sm:text-6xl" style={DISPLAY}>
-            Mozzy
-          </span>
-          <span className="hidden h-10 w-px bg-[#ECE6DA]/40 sm:block" />
-          <span className="hidden text-xs uppercase leading-relaxed tracking-[0.18em] sm:block" style={TYPE}>
-            Hear the mosquito.
-            <br />
-            Know the risk.
-          </span>
-        </div>
-        <nav className="flex items-center gap-2 text-sm sm:gap-6" style={DISPLAY}>
-          <button onClick={() => onPick("you")} className="hidden px-2 py-1 text-lg tracking-wider whitespace-nowrap hover:underline sm:block">
-            For you
-          </button>
-          <button onClick={() => onPick("prevention")} className="hidden px-2 py-1 text-lg tracking-wider whitespace-nowrap hover:underline sm:block">
-            For prevention
-          </button>
-          <Link
-            href="/listen"
-            className="ml-1 rounded-sm px-5 py-2.5 text-lg tracking-wider whitespace-nowrap text-[#13110F] transition-opacity hover:opacity-85"
-            style={{ backgroundColor: INK }}
-          >
-            Start listening
-          </Link>
-        </nav>
-      </header>
+      <div id="intro-first-screen" className="flex flex-col md:h-[100svh] md:min-h-[640px]">
+      {/* Masthead lives in the pinned bar; this keeps its space at the top */}
+      <div className={BAR_SPACER} aria-hidden="true" />
 
       {/* Two counters */}
       <div data-glow-zone className="relative z-10 grid flex-1 md:min-h-0 md:grid-cols-2 md:divide-x md:divide-[#ECE6DA]/20">
@@ -109,7 +94,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
           accent={ORANGE}
           word="Infected"
           value={infected}
-          roll={{ duration: 600, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }}
+          roll={INFECTED_ROLL}
           rate={
             <>
               <Num color={ORANGE}>+{CASES_PER_SECOND.toFixed(1)}</Num> every second
@@ -121,9 +106,8 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
           word="Died"
           value={perYear(deaths, clock)}
           // The last digit creeps through the whole ~45 s gap, so each death arrives as the end of a slow roll.
-          fraction={clock === null ? undefined : ((clock.secs / SECONDS_PER_YEAR) * deaths) % 1}
-          // Digits that carry over (…9 → …0) still turn with a slow, settling roll.
-          roll={{ duration: 1500, easing: "cubic-bezier(0.45, 0, 0.25, 1.15)" }}
+          fraction={deathFraction}
+          roll={DEATH_ROLL}
           rate={
             <>
               About <Num color={RED}>1</Num> every <Num color={RED}>{Math.round(SECONDS_PER_DEATH)}</Num> sec

@@ -22,20 +22,20 @@ export function RollingNumber({
         const key = text.length - i;
         if (ch < "0" || ch > "9") {
           return (
-            <span key={`s${key}`} aria-hidden="true">
+            <span key={`s${key}`} aria-hidden="true" className="inline-block h-[1.15em] leading-[1.15em]">
               {ch}
             </span>
           );
         }
         const d = ch.charCodeAt(0) - 48;
         return (
-          <span key={`d${key}`} aria-hidden="true" className="relative inline-block h-[1em] w-[0.62em] overflow-hidden">
+          <span key={`d${key}`} aria-hidden="true" className="relative inline-block h-[1.15em] w-[0.62em] overflow-hidden">
             <span
-              className="absolute inset-x-0 top-0 flex flex-col transition-transform duration-300 ease-out"
+              className="absolute inset-x-0 top-0 flex flex-col transition-transform duration-500 ease-out"
               style={{ transform: `translateY(-${d * 10}%)` }}
             >
               {DIGITS.map((n) => (
-                <span key={n} className="block h-[1em] text-center">
+                <span key={n} className="block h-[1.15em] text-center leading-[1.15em]">
                   {n}
                 </span>
               ))}

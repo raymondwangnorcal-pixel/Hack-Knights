@@ -55,6 +55,8 @@ export function CounterBanner() {
 
   return (
     <section aria-label="Mozzy clock" className="w-full font-mono">
+      {/* Side by side on desktop, stacked on mobile */}
+      <div className="grid lg:grid-cols-2">
       <Band
         tone="bg-[#ffb224] text-black"
         title="Infected"
@@ -76,6 +78,7 @@ export function CounterBanner() {
         }
         breakdown={DISEASES.map((d) => ({ name: d.name, value: perYear(d.deaths) }))}
       />
+      </div>
       <Wire items={WIRE} />
     </section>
   );
@@ -97,28 +100,30 @@ function Band({
   breakdown: { name: string; value: number | null }[];
 }) {
   return (
-    <div className={`${tone} grid items-center gap-x-8 gap-y-2 px-6 py-5 sm:px-12 lg:grid-cols-[11rem_1fr_auto]`}>
-      <div className="flex flex-col uppercase">
-        <span className="text-xl font-bold tracking-wide sm:text-2xl">{title}</span>
-        <span className="text-[11px] leading-tight opacity-75">{caption}</span>
+    <div className={`${tone} flex flex-col gap-2 px-6 py-5 sm:px-12 lg:px-10`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 uppercase">
+        <span className="flex flex-col">
+          <span className="text-xl font-bold tracking-wide">{title}</span>
+          <span className="text-[11px] leading-tight opacity-75">{caption}</span>
+        </span>
+        <span className="text-xs">{meta}</span>
       </div>
 
       <RollingNumber
         value={value}
-        className="text-[clamp(2.5rem,8.5vw,6.5rem)] font-bold tracking-tighter"
+        className="text-[clamp(2.5rem,8.5vw,4.75rem)] font-bold tracking-tighter lg:text-[clamp(2.5rem,4.6vw,4.75rem)]"
         sepClassName="font-sans -mr-[0.04em]"
       />
 
-      <div className="flex flex-col items-start gap-2 text-xs uppercase lg:items-end">
-        {meta}
-        <details className="group lg:text-right">
+      <div className="text-xs uppercase">
+        <details className="group">
           <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 border border-current px-2 py-0.5 select-none hover:bg-current/10 [&::-webkit-details-marker]:hidden">
             By disease
             <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true" className="transition-transform group-open:rotate-180">
               <path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" />
             </svg>
           </summary>
-          <ul className="mt-2 flex flex-col gap-1 normal-case">
+          <ul className="mt-2 flex max-w-xs flex-col gap-1 normal-case">
             {breakdown.map((d) => (
               <li key={d.name} className="flex justify-between gap-6">
                 <span className="opacity-75">{d.name}</span>

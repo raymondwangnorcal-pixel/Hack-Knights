@@ -1,56 +1,65 @@
-"""Pitch-rule fallback classifier. The trained model later replaces `classify` with the same return shape."""
+"""Clip -> (is it a mosquito?, which genus?, closest species).
+
+1. Gate: wingbeat tonality of the clip's clearest 2 s window (share of sound energy on the wingbeat pitch and
+   its 2x/3x overtones) must be >= GATE_CUTOFF. A rule, not a model: the trained detector did not transfer
+   to other recordings. Validated: catches 79% of Abuzz mosquito clips, 12% false alarms on HumBugDB background.
+2. Genus: trained gradient-boosted model (scripts/train_models.py), window probabilities averaged over the clip.
+   Held-out recording sets: 0.73 balanced accuracy for Anopheles vs Aedes.
+3. Species: same features, shown only as the closest match (held-out species accuracy is low).
+"""
+from pathlib import Path
+
+import joblib
 import numpy as np
 
-from .audio import frame_spectra
+from .features import FEATURE_VERSION, clip_windows, window_features
 
-MODEL_VERSION = "pitch-rule-v1"
-
-# Female wingbeat fundamentals sit roughly 300-1000 Hz; below 300 is mostly hum and handling noise.
-F0_MIN, F0_MAX = 300.0, 1000.0
-HARMONIC_BW = 15.0               # Hz either side of each harmonic counted as "wingbeat energy"
-BUZZ_FRAME_SHARE = 0.25          # average only the 25% of frames with the most wingbeat-band energy
+MODELS = Path(__file__).resolve().parent.parent / "models"
+GATE_CUTOFF = 0.20
+HARM = 50              # index of the wingbeat-tonality feature in window_features()
+WINDOWS = 6
 
 
-def _bin_power(freqs, p, f, bw):
-    m = (freqs >= f - bw) & (freqs <= f + bw)
-    return float(p[m].sum()) if m.any() else 0.0
+def _load(name):
+    path = MODELS / f"{name}.joblib"
+    if not path.exists():
+        raise RuntimeError(f"missing {path}: run scripts/train_models.py")
+    bundle = joblib.load(path)
+    if bundle["feature_version"] != FEATURE_VERSION:
+        raise RuntimeError(f"{name} model was trained on {bundle['feature_version']}, code is {FEATURE_VERSION}")
+    return bundle
 
 
-def features(x: np.ndarray) -> dict:
-    """f0_hz: wingbeat fundamental. band_ratio: share of 100-4000 Hz power on f0, 2f0, 3f0,
-    measured on the frames where the buzz is loudest (a mosquito is rarely audible for a whole clip)."""
-    x = x - x.mean()
-    freqs, pf = frame_spectra(x)
-    wing = (freqs >= F0_MIN) & (freqs <= F0_MAX)
-    broad = (freqs >= 100) & (freqs <= 4000)
-    share = pf[:, wing].sum(axis=1) / (pf[:, broad].sum(axis=1) + 1e-12)
-    k = max(1, int(round(len(share) * BUZZ_FRAME_SHARE)))
-    p = pf[np.argsort(share)[-k:]].mean(axis=0)
-    cand = np.where(wing)[0]
-    scores = [p[i] + 0.7 * _bin_power(freqs, p, 2 * freqs[i], 3) + 0.5 * _bin_power(freqs, p, 3 * freqs[i], 3)
-              for i in cand]
-    f0 = float(freqs[cand[int(np.argmax(scores))]])
-    total = float(p[(freqs >= 100) & (freqs <= 4000)].sum()) or 1e-12
-    harm = sum(_bin_power(freqs, p, k * f0, HARMONIC_BW) for k in (1, 2, 3) if k * f0 < 4000)
-    return {"f0_hz": f0, "band_ratio": harm / total, "rms": float(np.sqrt(np.mean(x ** 2)))}
+_genus = _load("genus")
+_species = _load("species")
+MODEL_VERSION = f"gate-harm{GATE_CUTOFF:.2f}+genus-hgb-{FEATURE_VERSION}"
 
 
-# From scripts/calibrate_pitch.py on the 6 Abuzz species (274 clips):
-# - band_ratio p10 per species was 0.05-0.19, so 0.05 keeps ~90% of real buzzes. Not yet checked
-#   against background audio (needs HumBugDB), so false triggers are unmeasured.
-# - Best 3-band pitch rule: balanced accuracy 0.49 vs 0.33 chance, in-sample. Pitch alone cannot
-#   separate genera reliably, so this rule reports a genus at low confidence and never a species.
-MIN_BAND_RATIO = 0.05
-GENUS_BANDS = [("anopheles", 0, 320), ("culex", 320, 500), ("aedes", 500, 10_000)]
-FALLBACK_CONFIDENCE = 0.35
+def _species_name(folder: str) -> str:
+    return folder.replace("_", " ")
 
 
 def classify(x: np.ndarray) -> dict:
-    ft = features(x)
-    if ft["band_ratio"] < MIN_BAND_RATIO:
-        return {"is_mosquito": False, "species": None, "genus": None, "confidence": None,
-                "top3": [], "features": ft, "model_version": MODEL_VERSION}
-    genus = next(g for g, lo, hi in GENUS_BANDS if lo <= ft["f0_hz"] < hi)
-    return {"is_mosquito": True, "species": None, "genus": genus, "confidence": FALLBACK_CONFIDENCE,
-            "top3": [{"genus": genus, "p": FALLBACK_CONFIDENCE}], "features": ft,
+    windows = clip_windows(x, WINDOWS, "buzz")
+    if not windows:
+        return {"is_mosquito": False, "species": None, "genus": None, "confidence": None, "top3": [],
+                "gate_score": 0.0, "model_version": MODEL_VERSION}
+    F = np.stack([window_features(w) for w in windows])
+    gate = float(F[:, HARM].max())
+    if gate < GATE_CUTOFF:
+        return {"is_mosquito": False, "species": None, "genus": None, "confidence": None, "top3": [],
+                "gate_score": round(gate, 3), "model_version": MODEL_VERSION}
+
+    gp = _genus["model"].predict_proba(F).mean(axis=0)
+    gi = int(gp.argmax())
+    sp = _species["model"].predict_proba(F).mean(axis=0)
+    order = np.argsort(sp)[::-1][:3]
+    top3 = [{"species": _species_name(_species["classes"][i]), "p": round(float(sp[i]), 3)} for i in order]
+    return {"is_mosquito": True,
+            "genus": _genus["classes"][gi],
+            "confidence": round(float(gp[gi]), 3),          # genus confidence: the headline
+            "species": top3[0]["species"],                   # closest match only
+            "top3": top3,
+            "genus_probs": {c: round(float(p), 3) for c, p in zip(_genus["classes"], gp)},
+            "gate_score": round(gate, 3),
             "model_version": MODEL_VERSION}

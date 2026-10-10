@@ -28,6 +28,7 @@ HUMBUG = ROOT / "data/humbug_features.npz"
 MODELS = ROOT / "backend/models"
 EXTS = {".wav", ".m4a", ".amr", ".mp4"}
 WINDOWS_PER_CLIP = 6
+DETECTOR_DEVICE = "Alcatel 4015X"   # the only HumBug phone with both mosquito and background audio
 
 
 def hgb():
@@ -114,20 +115,34 @@ def main():
         d = np.load(HUMBUG)
         if str(d["feature_version"]) != FEATURE_VERSION:
             sys.exit(f"HumBug features are {d['feature_version']}, code is {FEATURE_VERSION}: re-run the Colab cell")
-        Xd, yd, gd = d["X"], d["y"], d["groups"]
-        print(f"\nHumBug: {len(Xd)} windows from {len(set(gd))} files "
+        Xa, ya, ga, da = d["X"], d["y"], d["groups"], d["devices"]
+        # Background is ~all Alcatel 4015X and most mosquito audio is itel A16: pooled, the model could learn
+        # "which phone". Train and score on the one phone that has both classes; test the rest as unseen.
+        same = da == DETECTOR_DEVICE
+        Xd, yd, gd = Xa[same], ya[same], ga[same]
+        print(f"\nHumBug ({DETECTOR_DEVICE} only): {len(Xd)} windows from {len(set(gd))} files "
               f"(mosquito {int((yd == 1).sum())}, background {int((yd == 0).sum())})")
         ct, cp, classes = grouped_cv(Xd, yd, gd, gd)
-        det = report("DETECTOR (1 = mosquito)", ct, cp, classes)
+        det = report("DETECTOR (1 = mosquito), held-out files", ct, cp, classes)
         det["auc"] = round(float(roc_auc_score(ct, cp[:, 1])), 3)
+        det["device"] = DETECTOR_DEVICE
         print(f"   ROC AUC {det['auc']:.2f}")
         final = hgb().fit(Xd, yd)
-        # Cross-domain sanity check: share of Abuzz mosquito windows the detector calls mosquito.
+        # Unseen-phone checks: mosquito audio the detector never trained on should still be flagged.
+        other_mosq = (~same) & (ya == 1)
+        other_bg = (~same) & (ya == 0)
+        det["other_phone_mosquito_flagged"] = round(float((final.predict(Xa[other_mosq]) == 1).mean()), 3)
         det["abuzz_flagged_as_mosquito"] = round(float((final.predict(X) == 1).mean()), 3)
-        print(f"   on Abuzz buzz windows (all real mosquitoes, different recordings): "
+        print(f"   unseen phone, mosquito windows ({int(other_mosq.sum())}): "
+              f"{det['other_phone_mosquito_flagged']:.0%} flagged as mosquito")
+        if other_bg.any():
+            det["other_phone_background_flagged"] = round(float((final.predict(Xa[other_bg]) == 1).mean()), 3)
+            print(f"   unseen phone, background windows ({int(other_bg.sum())}): "
+                  f"{det['other_phone_background_flagged']:.0%} wrongly flagged as mosquito")
+        print(f"   Abuzz mosquito windows ({len(X)}, other phones and labs): "
               f"{det['abuzz_flagged_as_mosquito']:.0%} flagged as mosquito")
         results["detector"] = det
-        save("detector", final, final.classes_)
+        save("detector", final, final.classes_, {"trained_on_device": DETECTOR_DEVICE})
     else:
         print(f"\nDETECTOR skipped: {HUMBUG.relative_to(ROOT)} not found (run the Colab cell, move the download there)")
 

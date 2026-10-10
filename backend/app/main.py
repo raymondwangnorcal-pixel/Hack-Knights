@@ -101,6 +101,8 @@ async def classify(
                     "confidence": conf, "top3": [], "diseases": diseases, "model_version": version,
                     "duplicate": True}
 
-    return {"detection_id": str(row[0]), "is_mosquito": result["is_mosquito"], "species": result["species"],
-            "genus": result["genus"], "confidence": result["confidence"], "top3": result["top3"],
+    return {"detection_id": str(row[0]), "is_mosquito": result["is_mosquito"],
+            "genus": result["genus"], "confidence": result["confidence"],
+            "species": result["species"], "species_is_closest_match": True, "top3": result["top3"],
+            "genus_probs": result.get("genus_probs", {}), "gate_score": result["gate_score"],
             "diseases": diseases, "model_version": result["model_version"], "duplicate": False}

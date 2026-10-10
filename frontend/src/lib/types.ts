@@ -24,11 +24,14 @@ export interface ClassifyResponse {
   top3: { species: string; probability: number }[];
   diseases: Disease[];
   is_simulated: boolean;
+  gate_score?: number; // wingbeat tonality; mosquito if >= 0.20
+  model_version?: string;
 }
 
 /** GET /api/risk?country= */
 export interface DistrictRisk {
-  district: string;
+  district: string; // display name
+  district_id?: string; // service id, e.g. 'NG-LA-IKEJA'
   country: Country;
   lat: number;
   lng: number;
@@ -52,6 +55,7 @@ export interface Detection {
   time: string; // ISO
   country: Country;
   district: string;
+  district_id?: string;
   lat: number;
   lng: number;
   species: string | null;
@@ -68,16 +72,34 @@ export interface DetectionsResponse {
 /** GET /api/forecast?district= */
 export interface ForecastWeek {
   week_ahead: 1 | 2 | 3 | 4;
+  week_start?: string; // ISO date (Sunday)
   low: number;
   mid: number;
   high: number;
 }
 export interface ForecastResponse {
   district: string;
+  district_id?: string;
   country: Country;
   disease: Disease;
   is_simulated: boolean;
+  unit?: string; // 'cases' | 'positive mosquito pools' (West Nile)
   weeks: ForecastWeek[];
+}
+
+/** GET /api/timeline?country=&weeks= (spread-over-time slider) */
+export interface TimelineRow {
+  week: string; // ISO date, Sunday-start
+  district: string;
+  district_id: string;
+  detections: number;
+  cases: number | null;
+  cases_simulated: boolean;
+}
+export interface TimelineResponse {
+  country: Country;
+  weeks: number;
+  rows: TimelineRow[];
 }
 
 /** POST /api/recommend */

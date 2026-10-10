@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
 import { USE_MOCKS, mockForecast } from "@/lib/mockData";
+import { errorResponse, getForecast } from "@/lib/backend";
 
+// `district` may be a display name ("Alimosho") or a service id ("NG-LA-ALIMOSHO").
 export async function GET(request: NextRequest) {
   const district = request.nextUrl.searchParams.get("district");
   if (!district) {
@@ -14,9 +16,9 @@ export async function GET(request: NextRequest) {
       : Response.json({ error: "Unknown district" }, { status: 404 });
   }
 
-  const res = await fetch(
-    `${process.env.BUZZ_API_URL}/forecast?district=${encodeURIComponent(district)}`,
-    { cache: "no-store" },
-  );
-  return Response.json(await res.json(), { status: res.status });
+  try {
+    return Response.json(await getForecast(district));
+  } catch (err) {
+    return errorResponse(err);
+  }
 }

@@ -1,5 +1,6 @@
 import classifyMock from "@/mocks/classify.json";
 import { parseCountry } from "@/lib/mockData";
+import { classify, errorResponse } from "@/lib/backend";
 import type { ClassifyResponse, Country } from "@/lib/types";
 
 // Proxies the audio clip to the Data/ML FastAPI service.
@@ -14,8 +15,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Missing 'audio' file" }, { status: 400 });
   }
 
-  const apiUrl = process.env.BUZZ_API_URL;
-  if (!apiUrl) {
+  if (!process.env.BUZZ_API_URL) {
     const mock = (classifyMock as Record<Country, ClassifyResponse>)[country];
     return Response.json({
       ...mock,
@@ -23,29 +23,13 @@ export async function POST(request: Request) {
     });
   }
 
-  const upstream = new FormData();
-  upstream.append("audio", audio, "clip.webm");
-  upstream.append("country", country);
-  upstream.append("district", district);
+  if (!district) {
+    return Response.json({ error: "Missing 'district'" }, { status: 400 });
+  }
 
   try {
-    const res = await fetch(`${apiUrl.replace(/\/$/, "")}/classify`, {
-      method: "POST",
-      body: upstream,
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) {
-      return Response.json(
-        { error: `Model service returned ${res.status}` },
-        { status: 502 },
-      );
-    }
-    const data = (await res.json()) as ClassifyResponse;
-    return Response.json(data);
+    return Response.json(await classify(audio, country, district));
   } catch (err) {
-    return Response.json(
-      { error: "Model service unreachable", detail: String(err) },
-      { status: 504 },
-    );
+    return errorResponse(err);
   }
 }

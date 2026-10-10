@@ -49,6 +49,28 @@ export default function DashboardPage() {
       .then(setDetections);
   }, [country]);
 
+  // Live: each new detection from the phone pipeline (Postgres NOTIFY -> /stream) refetches the
+  // last 7 days of dots, debounced so a burst of uploads costs one request.
+  useEffect(() => {
+    const es = new EventSource(`/api/stream?country=${country}`);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    es.addEventListener("detection", () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const since = new Date(Date.now() - 7 * 864e5).toISOString();
+        fetch(`/api/detections?country=${country}&since=${encodeURIComponent(since)}`)
+          .then((r) => r.json())
+          .then((d: DetectionsResponse) => {
+            if (d.country === country) setDetections(d);
+          });
+      }, 1500);
+    });
+    return () => {
+      clearTimeout(timer);
+      es.close();
+    };
+  }, [country]);
+
   useEffect(() => {
     if (!selected) return;
     const district = selected.district;
@@ -237,7 +259,8 @@ export default function DashboardPage() {
             <section className="rounded-sm border p-4" style={{ borderColor: `${INK}33` }}>
               <h2 className="text-2xl tracking-wide uppercase" style={DISPLAY}>
                 <span style={{ color: ORANGE }}>{forecastFor ? forecastFor.district : selected.district}</span>:{" "}
-                {DISEASE_LABEL[forecastFor ? forecastFor.disease : selected.main_disease]} cases, next 4 weeks
+                {DISEASE_LABEL[forecastFor ? forecastFor.disease : selected.main_disease]}{" "}
+                {forecastFor?.unit === "positive mosquito pools" ? "positive pools" : "cases"}, next 4 weeks
               </h2>
               {forecastFor ? (
                 <div className={`transition-opacity ${forecastStale ? "opacity-40" : ""}`}>

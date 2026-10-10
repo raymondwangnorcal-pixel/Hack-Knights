@@ -212,8 +212,27 @@ Decisions: one background `LISTEN` connection reconnects every 3 s on failure an
 - Tighten CORS to the real Vercel domain once known.
 - Commit and push the current work (waiting for the go-ahead).
 
+## 13. Frontend ↔ backend wiring
+
+| Decision | Why |
+| --- | --- |
+| **One adapter layer in Next.js (`frontend/src/lib/backend.ts`); every `/api/*` route goes through it.** FastAPI shapes are unchanged. | The FastAPI service returns its own shapes (`district_id`, `lon`, risk 0–1, `"west nile"`, `top3[].p`); the components read the contract in `types.ts` (`district`, `lng`, risk 0–100, `west_nile`, `top3[].probability`). Converting in one place left component props untouched, so the uncommitted frontend work merges cleanly. |
+| **Detections are placed inside their district's real outline** (Gaussian around the centroid, rejection-sampled against the geoBoundaries polygon, seeded by `detection_id` so dots don't move between reloads). | The service stores the district, never GPS, so every detection carries the same centroid; drawn as-is, each district would be one stacked dot. Polygons come from `GET /districts?geojson=true`, cached per server process. |
+| UI district names are resolved to service ids server-side (`resolveDistrictId`). | The dashboard and listen page key districts by display name; `/forecast` and `/classify` need ids. Unknown or ambiguous names fail with a 422 instead of returning an empty result. |
+| `/classify` adapter adds `client_id` (fresh UUID), `recorded_at` (now), `district_id`, `device='web'`, `mime`. | Required by the service (`client_id` makes retries idempotent). |
+| Errors fail loudly: the upstream status and body are passed through as JSON with a 4xx/5xx status. No silent fallback to mocks once `BUZZ_API_URL` is set. | A silent mock fallback would make a broken backend look like working data. |
+| `is_simulated` on `/api/risk` = any simulated case history **or** any seeded detection. | All three maps currently use seeded detections; the "Simulated data" badge must show. |
+| New routes: `/api/timeline` (time slider), `/api/districts` (outlines), `/api/stream` (SSE relay). The dashboard listens on `/api/stream` and refetches the last 7 days of dots 1.5 s after a burst of live detections. | Exposes the remaining pipelines for the uncommitted UI work. The relay works locally; on Vercel the function time limit cuts it and `EventSource` reconnects on its own. |
+| Gemini district plans are grounded in live numbers (risk score, rank, 7-day detections, 14-day cases, 4-week forecast). | Plans reference the district's actual situation instead of generic text. Falls back to the grounded table without `GEMINI_API_KEY`. |
+| West Nile forecast labelled "positive pools", not "cases". | Matches the forecast's `unit`. |
+
+**Local run:** backend `.venv/bin/uvicorn app.main:app --app-dir backend --port 8001`; frontend `frontend/.env.local` with `BUZZ_API_URL=http://localhost:8001`, then `npx next dev --port 3001`.
+
+**Data seen on 2026-10-10 (last 7 days):** NG 702 detections, BR 151, US 7. Note: Tiger's West Nile data was re-run after §8 was written (case history now ~50–130 pools per Brooklyn week; latest forecast batch 2026-10-10 21:36 UTC: Brooklyn 22.4 → 1.6 → 0.8 → 0), so §8's numbers are out of date.
+
 ## Change log
 - **2026-10-09/10:** Tiger schema and districts loaded; `/classify` service with mock phone; Snowflake set up over REST; dengue history and weather loaded; dengue forecast trained, back-tested and published to Tiger.
 - **2026-10-10:** Audio features and genus/species classifier trained; HumBug detector tried and rejected; tonality gate adopted; new pipeline wired into `/classify`; demo clips exported. This document started.
 - **2026-10-10:** Lagos malaria history simulated from real rainfall; malaria forecast trained in Snowflake; both diseases published to Tiger (`run_forecast.py` and `publish_to_tiger.py` now handle multiple diseases).
 - **2026-10-10:** New York (5 boroughs, `US`) added; West Nile positive pools simulated from real NYC temperature and forecast; all three diseases published to Tiger; 8 weeks of detections seeded; dashboard read endpoints and the live `/stream` added and verified; Cortex Search dropped (Gemini handles guidance).
+- **2026-10-10:** Frontend wired to the live backend through one Next.js adapter (`frontend/src/lib/backend.ts`); detections scattered inside real district outlines; timeline, districts and stream routes added; dashboard updates live; verified on all three maps.

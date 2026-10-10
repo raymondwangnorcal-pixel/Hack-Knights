@@ -95,7 +95,7 @@ export function StickyBar({
         {/* One line. Below 1280px wide it fades out as the counters arrive, so they never collide. */}
         <span
           className="hidden whitespace-nowrap uppercase tracking-[0.16em] sm:block max-xl:opacity-[var(--tag)]"
-          style={{ ...TYPE, fontSize: `${lerp(16, 13, p)}px`, ["--tag" as string]: String(1 - stats) }}
+          style={{ ...TYPE, fontSize: `${lerp(20, 15, p)}px`, ["--tag" as string]: String(1 - stats) }}
         >
           Detect locally. Prevent globally.
         </span>

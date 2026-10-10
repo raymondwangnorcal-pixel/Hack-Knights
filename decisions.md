@@ -161,6 +161,17 @@ The bands are too narrow here (63–67% instead of 80%): the simulation's week-t
 
 **Result:** 705 rows = 5 boroughs × 141 weeks (2024-01-21 to 2026-09-27). 2025 average pools per borough-week: 0 Jan–May, 1.2 Jun, 6.6 Jul, 5.3 Aug, 1.6 Sep, 0.1 Oct. Forecast: 20 rows, all near zero for October (season ending), e.g. Brooklyn 1.4 → 0.6 pools/week. Consequence for the demo: New York's map and forecast look quiet in October; that is the realistic off-season, not a bug.
 
+**West Nile back-test (simulated NYC data):** 3 origins (2026-07-05, 08-02, 08-30) × 5 boroughs = 15 forecasts per horizon, weeks the model never saw.
+
+| Weeks ahead | WAPE | Share inside the 80% band |
+| --- | --- | --- |
+| 1 | 0.41 | 0.73 |
+| 2 | 0.43 | 0.53 |
+| 3 | 0.53 | 0.67 |
+| 4 | 0.79 | 0.47 |
+
+Much weaker than dengue and malaria, for three reasons: counts are tiny (a few pools per borough-week, so a miss of 1–2 pools is a large percentage), the origins straddle the season's peak and decline (the hardest stretch to forecast), and only 15 forecasts per horizon make the numbers noisy. Pitch use: quote at most the 1-week figure ("~40% error one week ahead on simulated data"), or leave West Nile accuracy off the slide and lead with dengue.
+
 **Known weakness:** West Nile's vector is Culex, our weakest genus (never recognized on held-out recordings: 13 clips, 2 recording sets). A Culex demo clip from the training data classifies correctly; do not claim New York detection accuracy.
 
 ## 9. Dashboard API and live stream

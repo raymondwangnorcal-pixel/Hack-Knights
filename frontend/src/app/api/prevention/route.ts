@@ -90,14 +90,20 @@ async function chooseWithGemini(candidates: ReturnType<typeof householdCandidate
       }),
       signal: AbortSignal.timeout(20000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`prevention: Gemini returned ${res.status}`, (await res.text().catch(() => "")).slice(0, 500));
+      return null;
+    }
     const data = await res.json();
     const raw = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("");
     const generated = JSON.parse(raw);
     const ids = generated?.ids;
     if (!Array.isArray(ids) || ids.length !== 3 || new Set(ids).size !== 3 ||
         ids[0] !== candidates[0].id || ids[1] !== candidates[1].id ||
-        !candidates.slice(2).some((a) => a.id === ids[2])) return null;
+        !candidates.slice(2).some((a) => a.id === ids[2])) {
+      console.error("prevention: Gemini picked invalid ids", JSON.stringify(ids), candidates.map((c) => c.id).join(","));
+      return null;
+    }
     const chosen = ids.map((id: string) => candidates.find((a) => a.id === id)!);
     if (language === "en") return remember(chosen);
     const translations = generated?.translations;
@@ -110,7 +116,8 @@ async function chooseWithGemini(candidates: ReturnType<typeof householdCandidate
       // Chemical text stays curated until country-specific translations have been reviewed.
       return original.id === "bti-option" ? { ...original, language: "en" as const } : { ...original, title: t.title.trim(), reason: t.reason.trim() };
     }));
-  } catch {
+  } catch (err) {
+    console.error("prevention: Gemini call failed", String(err));
     return null;
   }
 }

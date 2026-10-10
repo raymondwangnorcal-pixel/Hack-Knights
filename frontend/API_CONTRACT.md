@@ -9,7 +9,8 @@ The frontend calls only the Next.js routes below. When `BUZZ_API_URL` is set, `c
 | `GET /api/detections?country=NG&since=ISO` | `GET /detections?...` | | `DetectionsResponse` |
 | `GET /api/forecast?district=Alimosho` | `GET /forecast?district=...` | | `ForecastResponse` |
 | `POST /api/recommend` | (Gemini, called from Next.js) | JSON `RecommendRequest` (with `language`) | `{ text, source }` |
-| `POST /api/voice` | (ElevenLabs, called from Next.js) | JSON `{ text, language }` | `audio/mpeg` |
+| `GET /api/voice?lang=ha&text=…` | (ElevenLabs, called from Next.js) | query `lang`, `text` (≤ 600 chars) | `audio/mpeg`, cached by the CDN and the phone |
+| `POST /api/voice` | (ElevenLabs, called from Next.js) | JSON `{ text, language }` | `audio/mpeg`, uncached |
 | `GET /api/voice` | (reads env) | | `{ languages: [] }`: languages with a voice configured |
 
 ## What the Next.js classify route sends to FastAPI `POST /classify`

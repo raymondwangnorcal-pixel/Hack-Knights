@@ -65,3 +65,16 @@
 - Superseded by: none
 - Note: Implemented in the frontend app and API contract on the frontend branch.
 - Privacy waivers: none
+
+## DEC-0004 — Voices for spoken advice
+
+- Date: 2026-10-10
+- Owner: user
+- Status at record: active
+- Decision: Six languages are spoken: English (Tobi, Nigerian), Portuguese (Fabi, Brazilian), Hausa (Ibrahim, on eleven_v3), and Spanish, French and Mandarin (Sarah, ElevenLabs' built-in multilingual voice). Yoruba and Cantonese stay text-only. Results are read aloud automatically, with a mute toggle remembered per device. Spoken lines are cached by the CDN and on the phone.
+- Rationale: ElevenLabs lists no model for Yoruba or Cantonese; Hausa is supported only from Eleven v3. The account is on the free plan, which has 3 library-voice slots, so native voices go to the demo languages.
+- Scope: voice route (cacheable GET), listening screen (auto-speak, mute, replay), Vercel env vars ELEVENLABS_VOICE_{EN,PT,HA,ES,FR,ZH} and ELEVENLABS_MODEL_HA.
+- Implementation: elevenlabs-voice branch
+- Supersedes: none (refines DEC-0002)
+- Evidence: https://elevenlabs.io/docs/help-center/other/what-languages-do-you-support ; session conversation of 2026-10-10.
+- Privacy waivers: none

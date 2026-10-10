@@ -22,7 +22,8 @@ const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
 const ramp = (p: number, a: number, b: number) => clamp((p - a) / (b - a));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-/** Scroll progress through the element with this id: 0 at the top, 1 once it has scrolled away. */
+/** Scroll progress: 0 at the top of the page, 1 the moment the bottom of the element with this
+ *  id has slid up behind the bar (i.e. the big counters are out of view). */
 function useScrollProgress(targetId: string): number {
   const [p, setP] = useState(0);
   useEffect(() => {
@@ -30,7 +31,8 @@ function useScrollProgress(targetId: string): number {
     const update = () => {
       raf = 0;
       const el = document.getElementById(targetId);
-      const span = Math.max(1, (el?.offsetHeight ?? window.innerHeight) - 64);
+      const bottom = el ? el.getBoundingClientRect().bottom + window.scrollY : window.innerHeight;
+      const span = Math.max(1, bottom - 64);
       setP(clamp(window.scrollY / span));
     };
     const onScroll = () => {

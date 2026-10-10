@@ -76,7 +76,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
     >
       <GlowGrid colors={GLOW} />
       <StickyBar
-        trackId="intro-first-screen"
+        trackId="intro-big-number"
         onPick={onPick}
         counters={[
           { value: infected, word: "Infected", color: ORANGE, roll: INFECTED_ROLL },
@@ -159,6 +159,7 @@ function Panel({
       </h2>
       <RollingNumber
         value={value}
+        id={word === "Infected" ? "intro-big-number" : undefined}
         className="mt-3 mb-2 text-[clamp(4.5rem,8.5vw,9rem)]"
         sepClassName=""
         digitWidth="0.42em"

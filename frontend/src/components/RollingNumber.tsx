@@ -22,6 +22,7 @@ export function RollingNumber({
   fraction,
   fractionMs = 1000,
   style,
+  id,
 }: {
   value: number | null;
   className?: string;
@@ -42,12 +43,13 @@ export function RollingNumber({
   /** How often `fraction` updates, in ms; the creep glides linearly over this long. */
   fractionMs?: number;
   style?: React.CSSProperties;
+  id?: string;
 }) {
   if (value === null) return <span className={className} style={style}>—</span>;
   const text = value.toLocaleString("en-US");
 
   return (
-    <span className={`inline-flex leading-none ${className}`} style={style} aria-label={text}>
+    <span id={id} className={`inline-flex leading-none ${className}`} style={style} aria-label={text}>
       {text.split("").map((ch, i) => {
         // Key from the right so each reel keeps its place value as the number grows.
         const key = text.length - i;

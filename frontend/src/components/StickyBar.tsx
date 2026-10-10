@@ -59,14 +59,21 @@ type Counter = {
   roll: { duration: number; easing: string };
 };
 
+type Side = "you" | "prevention";
+
 export function StickyBar({
   trackId,
   counters,
   onPick,
+  side,
+  onSide,
 }: {
   trackId: string;
   counters: [Counter, Counter];
-  onPick: (side: "you" | "prevention") => void;
+  onPick: (side: Side) => void;
+  /** Which side the page below is showing; drives the header toggle once you scroll. */
+  side: Side;
+  onSide: (side: Side) => void;
 }) {
   const p = useScrollProgress(trackId);
 
@@ -96,17 +103,23 @@ export function StickyBar({
           Mozzy
         </span>
         <span className="hidden w-px bg-[#ECE6DA]/40 sm:block" style={{ height: `${lerp(30, 24, p)}px` }} />
-        {/* One line. Below 1280px wide it fades out as the counters arrive, so they never collide. */}
-        <span
-          className="hidden whitespace-nowrap uppercase tracking-[0.16em] sm:block max-xl:opacity-[var(--tag)]"
-          style={{ ...TYPE, fontSize: `${lerp(15, 12.5, p)}px`, ["--tag" as string]: String(1 - stats) }}
-        >
-          Detect locally. Prevent globally.
-        </span>
+        {/* The tagline hands its place to the For you / For prevention toggle as the counters arrive. */}
+        <div className="relative hidden items-center sm:flex">
+          <span
+            className="whitespace-nowrap uppercase tracking-[0.16em]"
+            style={{ ...TYPE, fontSize: `${lerp(15, 12.5, p)}px`, opacity: 1 - stats }}
+            aria-hidden={stats > 0.5}
+          >
+            Detect locally. Prevent globally.
+          </span>
+          <SideToggle side={side} onSide={onSide} reveal={stats} className="absolute top-1/2 left-0 -translate-y-1/2" />
+        </div>
+        {/* Phones: the toggle takes the right side once the top tabs are gone */}
+        <SideToggle side={side} onSide={onSide} reveal={stats} className="ml-auto sm:hidden" small />
 
         {/* Counters: right-aligned, vertically centred */}
         <div
-          className="ml-auto hidden items-center gap-6 md:flex"
+          className="ml-auto hidden items-center gap-6 lg:flex"
           style={{
             opacity: stats,
             transform: `scale(${lerp(0.8, 1, stats)})`,
@@ -145,9 +158,9 @@ export function StickyBar({
         </nav>
       </div>
 
-      {/* Phones: counters on a second slim row */}
+      {/* Below 1024px: counters on a second slim row */}
       <div
-        className="flex items-center justify-between gap-3 overflow-hidden px-6 md:hidden"
+        className="flex items-center justify-between gap-3 overflow-hidden px-6 lg:hidden"
         style={{ height: `${lerp(0, 34, stats)}px`, opacity: stats }}
         aria-hidden={stats === 0}
       >
@@ -158,6 +171,57 @@ export function StickyBar({
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SideToggle({
+  side,
+  onSide,
+  reveal,
+  className,
+  small,
+}: {
+  side: Side;
+  onSide: (s: Side) => void;
+  /** 0 → hidden, 1 → fully shown; follows the counters' reveal. */
+  reveal: number;
+  className?: string;
+  small?: boolean;
+}) {
+  const shown = reveal > 0.05;
+  return (
+    <div
+      role="tablist"
+      aria-label="Who is Mozzy for?"
+      aria-hidden={!shown}
+      className={`flex whitespace-nowrap rounded-full border border-[#ECE6DA]/25 p-[3px] ${className ?? ""}`}
+      style={{
+        ...DISPLAY,
+        opacity: reveal,
+        transform: `scale(${lerp(0.92, 1, reveal)})`,
+        transformOrigin: "left center",
+        visibility: shown ? "visible" : "hidden",
+        pointerEvents: reveal > 0.5 ? "auto" : "none",
+      }}
+    >
+      {(["you", "prevention"] as Side[]).map((s) => {
+        const active = side === s;
+        return (
+          <button
+            key={s}
+            role="tab"
+            aria-selected={active}
+            tabIndex={shown ? 0 : -1}
+            onClick={() => onSide(s)}
+            className={`rounded-full uppercase tracking-wider transition-colors duration-300 ${
+              small ? "px-3 py-0.5 text-[14px]" : "px-5 py-1 text-[16px]"
+            } ${active ? "bg-[#ECE6DA] text-[#13110F]" : "text-[#ECE6DA]/80 hover:text-[#ECE6DA]"}`}
+          >
+            {s === "you" ? "For you" : "For prevention"}
+          </button>
+        );
+      })}
     </div>
   );
 }

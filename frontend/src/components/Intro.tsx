@@ -59,7 +59,15 @@ function useJitteredCount(annual: number): number | null {
   return shown;
 }
 
-export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
+export function Intro({
+  onPick,
+  side,
+  onSide,
+}: {
+  onPick: (side: IntroSide) => void;
+  side: IntroSide;
+  onSide: (side: IntroSide) => void;
+}) {
   const clock = useYearClock(1000);
   const perYear = (annual: number, c: typeof clock) =>
     c === null ? null : Math.floor((c.secs / SECONDS_PER_YEAR) * annual);
@@ -78,6 +86,8 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
       <StickyBar
         trackId="intro-big-number"
         onPick={onPick}
+        side={side}
+        onSide={onSide}
         counters={[
           { value: infected, word: "Infected", color: ORANGE, roll: INFECTED_ROLL },
           { value: perYear(deaths, clock), word: "Dead", color: RED, fraction: deathFraction, roll: DEATH_ROLL },
@@ -115,6 +125,16 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
           }
         />
         <Sources />
+        {/* Nudge toward the listening screen: a slow, small bob (still for reduce-motion) */}
+        <button
+          onClick={() => onPick("you")}
+          aria-label="Scroll down to start listening"
+          className="bob-arrow absolute bottom-4 left-1/2 z-20 hidden h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border border-[#ECE6DA]/30 bg-[#13110F] transition-colors hover:border-[#ECE6DA]/80 md:flex"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 4v15M5.5 12.5 12 19l6.5-6.5" />
+          </svg>
+        </button>
       </div>
 
       <Collage />
@@ -196,7 +216,7 @@ function Sources() {
   return (
     <div
       ref={box}
-      className="z-20 max-md:relative max-md:mr-6 max-md:mb-3 max-md:justify-self-end md:absolute md:right-6 md:bottom-3"
+      className="z-20 max-md:relative max-md:mr-6 max-md:mb-3 max-md:justify-self-end md:absolute md:left-6 md:bottom-3"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
@@ -217,7 +237,7 @@ function Sources() {
       <p
         id="intro-sources"
         role="tooltip"
-        className={`absolute right-0 bottom-full mb-2 w-[min(420px,calc(100vw-2rem))] border border-[#ECE6DA]/25 bg-[#13110F] p-3 text-[10.5px] leading-relaxed tracking-[0.06em] uppercase shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-opacity ${
+        className={`absolute right-0 bottom-full mb-2 w-[min(420px,calc(100vw-2rem))] md:right-auto md:left-0 border border-[#ECE6DA]/25 bg-[#13110F] p-3 text-[10.5px] leading-relaxed tracking-[0.06em] uppercase shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-opacity ${
           open ? "opacity-95" : "pointer-events-none opacity-0"
         }`}
         style={TYPE}

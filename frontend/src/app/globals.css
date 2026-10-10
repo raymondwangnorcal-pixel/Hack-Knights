@@ -77,3 +77,15 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .identify-bar > span { animation: none; width: 100%; opacity: 0.6; }
 }
+
+/* Intro: the down arrow bobs gently */
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+.bob-arrow {
+  animation: bob 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bob-arrow { animation: none; }
+}

@@ -19,8 +19,9 @@ export function scrollToId(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
   if (lenis) {
-    const offset = -parseFloat(getComputedStyle(el).scrollMarginTop || "0");
-    lenis.scrollTo(el, { offset, lerp: 0.06 });
+    // Exact pixel target (element top minus its scroll-margin), so the margin is applied once.
+    const margin = parseFloat(getComputedStyle(el).scrollMarginTop || "0");
+    lenis.scrollTo(el.getBoundingClientRect().top + window.scrollY - margin, { lerp: 0.06 });
   } else {
     el.scrollIntoView({ behavior: "smooth" });
   }

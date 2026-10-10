@@ -85,9 +85,9 @@ function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => vo
 
   return (
     <>
-    <Intro onPick={pick} />
+    <Intro onPick={pick} side={side} onSide={onChange} />
     {/* "For you" is the live listening screen, in the intro's poster palette. */}
-    {!dark && <YouSide onChange={onChange} />}
+    {!dark && <YouSide />}
     {dark && <main
       id="start"
       className={`flex min-h-screen flex-1 scroll-mt-16 flex-col transition-colors duration-500 ${
@@ -155,36 +155,14 @@ function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => vo
 const POSTER_INK = "#ECE6DA";
 const POSTER_BG = "#13110F";
 
-function YouSide({ onChange }: { onChange: (s: Side) => void }) {
+function YouSide() {
+  // The For you / For prevention toggle lives in the pinned header once you've scrolled here.
   return (
     <main
       id="start"
-      className="flex min-h-[calc(100svh-52px)] flex-1 scroll-mt-[86px] flex-col gap-4 px-3 pt-5 pb-3 md:scroll-mt-[52px] sm:px-3"
+      className="flex min-h-[calc(100svh-52px)] flex-1 scroll-mt-[86px] flex-col gap-4 px-3 pt-3 pb-3 lg:scroll-mt-[52px] sm:px-3"
       style={{ backgroundColor: POSTER_BG, color: POSTER_INK }}
     >
-      <div
-        role="tablist"
-        aria-label="Who is Mozzy for?"
-        className="mx-auto flex rounded-full border border-[#ECE6DA]/25 p-1"
-        style={{ fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" }}
-      >
-        {SIDES.map((s) => {
-          const active = s.id === "you";
-          return (
-            <button
-              key={s.id}
-              role="tab"
-              aria-selected={active}
-              onClick={() => onChange(s.id)}
-              className={`min-w-[150px] rounded-full px-6 py-2 text-[20px] tracking-wider uppercase transition-colors duration-300 sm:min-w-[200px] ${
-                active ? "bg-[#ECE6DA] text-[#13110F]" : "text-[#ECE6DA]/85 hover:text-[#ECE6DA]"
-              }`}
-            >
-              {s.label}
-            </button>
-          );
-        })}
-      </div>
       <ListenScreen />
     </main>
   );

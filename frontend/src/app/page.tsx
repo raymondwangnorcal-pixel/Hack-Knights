@@ -11,8 +11,13 @@ export default function Home() {
       {/* Wordmark straddles both sides; mix-blend-difference keeps it visible on white and black. */}
       <div className="pointer-events-none absolute inset-x-0 top-6 z-10 flex justify-center mix-blend-difference">
         <span className="flex items-center gap-2 text-lg font-semibold tracking-tight text-white">
-          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3 22 20H2z" fill="currentColor" />
+          <svg width="20" height="18" viewBox="0 0 20 18" aria-hidden="true">
+            {/* Soundwave mark: the buzz Mozzy listens for */}
+            <rect x="0" y="7" width="2.5" height="4" rx="1.25" fill="currentColor" />
+            <rect x="4.4" y="3" width="2.5" height="12" rx="1.25" fill="currentColor" />
+            <rect x="8.8" y="0" width="2.5" height="18" rx="1.25" fill="currentColor" />
+            <rect x="13.2" y="4" width="2.5" height="10" rx="1.25" fill="currentColor" />
+            <rect x="17.5" y="7" width="2.5" height="4" rx="1.25" fill="currentColor" />
           </svg>
           Mozzy
         </span>

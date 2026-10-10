@@ -13,8 +13,10 @@ const BG = "#13110F";
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 
-/** Height the intro must reserve for the bar at the very top, per breakpoint. */
-export const BAR_SPACER = "h-[64px] md:h-[86px]";
+/** Height the intro must reserve for the bar at the very top. */
+export const BAR_SPACER = "h-[64px]";
+/** Bar height once the first screen has scrolled away. */
+const BAR_SHRUNK = 52;
 
 const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
 /** 0 → 1 as `p` runs from `a` to `b`. */
@@ -31,7 +33,7 @@ function useScrollProgress(targetId: string): number {
       raf = 0;
       const el = document.getElementById(targetId);
       const bottom = el ? el.getBoundingClientRect().bottom + window.scrollY : window.innerHeight;
-      const span = Math.max(1, bottom - 64);
+      const span = Math.max(1, bottom - BAR_SHRUNK);
       setP(clamp(window.scrollY / span));
     };
     const onScroll = () => {
@@ -88,23 +90,23 @@ export function StickyBar({
       {/* Main row */}
       <div
         className="relative flex items-center gap-5 px-6 sm:px-10"
-        style={{ height: `${lerp(86, 64, p)}px` }}
+        style={{ height: `${lerp(64, BAR_SHRUNK, p)}px` }}
       >
-        <span className="leading-none tracking-wide" style={{ ...DISPLAY, fontSize: `${lerp(60, 42, p)}px` }}>
+        <span className="leading-none tracking-wide" style={{ ...DISPLAY, fontSize: `${lerp(44, 34, p)}px` }}>
           Mozzy
         </span>
-        <span className="hidden w-px bg-[#ECE6DA]/40 sm:block" style={{ height: `${lerp(40, 30, p)}px` }} />
+        <span className="hidden w-px bg-[#ECE6DA]/40 sm:block" style={{ height: `${lerp(30, 24, p)}px` }} />
         {/* One line. Below 1280px wide it fades out as the counters arrive, so they never collide. */}
         <span
           className="hidden whitespace-nowrap uppercase tracking-[0.16em] sm:block max-xl:opacity-[var(--tag)]"
-          style={{ ...TYPE, fontSize: `${lerp(20, 15, p)}px`, ["--tag" as string]: String(1 - stats) }}
+          style={{ ...TYPE, fontSize: `${lerp(15, 12.5, p)}px`, ["--tag" as string]: String(1 - stats) }}
         >
           Detect locally. Prevent globally.
         </span>
 
         {/* Counters: right-aligned, vertically centred */}
         <div
-          className="ml-auto hidden items-center gap-7 md:flex"
+          className="ml-auto hidden items-center gap-6 md:flex"
           style={{
             opacity: stats,
             transform: `scale(${lerp(0.8, 1, stats)})`,
@@ -114,8 +116,8 @@ export function StickyBar({
           aria-hidden={stats === 0}
         >
           {counters.map((c, i) => (
-            <div key={c.word} className="flex items-center gap-7">
-              {i > 0 && <span className="h-9 w-px bg-[#ECE6DA]/25" />}
+            <div key={c.word} className="flex items-center gap-6">
+              {i > 0 && <span className="h-7 w-px bg-[#ECE6DA]/25" />}
               <Stat c={c} words={words} />
             </div>
           ))}
@@ -127,15 +129,15 @@ export function StickyBar({
           style={{ ...DISPLAY, opacity: tabs, visibility: tabsGone ? "hidden" : "visible" }}
           aria-hidden={tabsGone}
         >
-          <button onClick={() => onPick("you")} className="hidden px-2 py-1 text-lg tracking-wider whitespace-nowrap hover:underline sm:block">
+          <button onClick={() => onPick("you")} className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
             For you
           </button>
-          <button onClick={() => onPick("prevention")} className="hidden px-2 py-1 text-lg tracking-wider whitespace-nowrap hover:underline sm:block">
+          <button onClick={() => onPick("prevention")} className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
             For prevention
           </button>
           <button
             onClick={() => onPick("you")}
-            className="ml-1 rounded-sm px-5 py-2.5 text-lg tracking-wider whitespace-nowrap text-[#13110F] transition-opacity hover:opacity-85"
+            className="ml-1 rounded-sm px-4 py-1.5 text-base tracking-wider whitespace-nowrap text-[#13110F] transition-opacity hover:opacity-85"
             style={{ backgroundColor: INK }}
           >
             Start listening
@@ -177,16 +179,16 @@ function BarNumber({ c }: { c: Counter }) {
 
 function Stat({ c, words }: { c: Counter; words: number }) {
   return (
-    <span className="flex items-center gap-2.5 text-[42px] leading-none" style={DISPLAY}>
+    <span className="flex items-center gap-2 text-[32px] leading-none" style={DISPLAY}>
       <BarNumber c={c} />
       {/* Same size as the number; arrives as the shrink finishes. Takes no width until then,
           so the numbers stay right-aligned all the way through the scroll. */}
       <span
         className="flex items-center gap-2.5 overflow-hidden whitespace-nowrap"
-        style={{ maxWidth: `${words * 240}px`, opacity: words }}
+        style={{ maxWidth: `${words * 190}px`, opacity: words }}
       >
         <span className="tracking-wide">{c.word}</span>
-        <span className="flex flex-col text-[13px] leading-[1.05] tracking-[0.1em] opacity-75">
+        <span className="flex flex-col text-[11px] leading-[1.05] tracking-[0.1em] opacity-75">
           <span>Since</span>
           <span>Jan 1st</span>
         </span>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Intro } from "@/components/Intro";
 import { ListenScreen } from "@/components/ListenScreen";
+import { scrollToId } from "@/components/SmoothScroll";
 
 // One full-screen landing page with two sides, switched by a toggle near the top.
 // Starts on "For you" (light). "For prevention" (governments & nonprofits, dark) takes over
@@ -79,7 +80,7 @@ function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => vo
   // The intro picks a side and scrolls down to it.
   const pick = (s: Side) => {
     onChange(s);
-    document.getElementById("start")?.scrollIntoView({ behavior: "smooth" });
+    scrollToId("start");
   };
 
   return (
@@ -158,7 +159,7 @@ function YouSide({ onChange }: { onChange: (s: Side) => void }) {
   return (
     <main
       id="start"
-      className="flex min-h-[calc(100svh-64px)] flex-1 scroll-mt-[98px] flex-col gap-4 px-3 pt-5 pb-3 md:scroll-mt-16 sm:px-3"
+      className="flex min-h-[calc(100svh-52px)] flex-1 scroll-mt-[86px] flex-col gap-4 px-3 pt-5 pb-3 md:scroll-mt-[52px] sm:px-3"
       style={{ backgroundColor: POSTER_BG, color: POSTER_INK }}
     >
       <div

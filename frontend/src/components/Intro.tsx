@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { RollingNumber } from "@/components/RollingNumber";
 import { useYearClock } from "@/lib/useYearClock";
 import { CASES_PER_SECOND, DISEASES, SECONDS_PER_DEATH, SECONDS_PER_YEAR } from "@/lib/burden";
@@ -23,13 +24,41 @@ const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" 
 const PAPER =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.3 0 0 0 0 0.22 0 0 0 0.09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")";
 
+/**
+ * Running total since Jan 1 that jumps by a random 6–14 people each second. Each jump is nudged
+ * toward the true estimate (≈ 9.4 a second), so the count looks alive but never drifts from it.
+ */
+function useJitteredCount(annual: number): number | null {
+  const [shown, setShown] = useState<number | null>(null);
+  useEffect(() => {
+    const truth = () => {
+      const now = new Date();
+      const secs = (now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 1)) / 1000;
+      return Math.floor((secs / SECONDS_PER_YEAR) * annual);
+    };
+    const tick = () =>
+      setShown((prev) => {
+        if (prev === null) return truth();
+        const noise = Math.floor(Math.random() * 7) - 3; // -3 … +3
+        const step = Math.min(14, Math.max(6, truth() - prev + noise));
+        return prev + step;
+      });
+    const first = setTimeout(tick, 0);
+    const id = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, [annual]);
+  return shown;
+}
+
 export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
   const clock = useYearClock(1000);
-  // One tick per new infection: about 9.4 a second.
-  const fast = useYearClock(1000 / CASES_PER_SECOND);
   const perYear = (annual: number, c: typeof clock) =>
     c === null ? null : Math.floor((c.secs / SECONDS_PER_YEAR) * annual);
   const cases = DISEASES.reduce((s, d) => s + d.cases, 0);
+  const infected = useJitteredCount(cases);
   const deaths = DISEASES.reduce((s, d) => s + d.deaths, 0);
 
   return (
@@ -73,8 +102,8 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
         <Panel
           accent={ORANGE}
           word="Infected"
-          value={perYear(cases, fast)}
-          roll={{ duration: 90, easing: "linear" }}
+          value={infected}
+          roll={{ duration: 600, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }}
           rate={
             <>
               <Num color={ORANGE}>+{CASES_PER_SECOND.toFixed(1)}</Num> every second
@@ -202,10 +231,7 @@ const PHOTOS: Photo[] = [
 
 function Collage() {
   return (
-    <section aria-label="People affected by mosquito-borne disease" className="border-t border-[#1C2624]/20 pt-5 pb-6">
-      <h3 className="mb-3 px-6 text-[11px] uppercase tracking-[0.18em] sm:px-10" style={TYPE}>
-        The people behind the numbers
-      </h3>
+    <section aria-label="People affected by mosquito-borne disease" className="border-t border-[#1C2624]/20 py-6">
       <div
         className="photo-reel overflow-hidden"
         style={{ maskImage: "linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent)" }}

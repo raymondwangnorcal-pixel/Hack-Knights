@@ -16,6 +16,10 @@ export function RollingNumber({
   sepClassName = "",
   duration = 500,
   easing = "cubic-bezier(0.2, 0.8, 0.2, 1)",
+  digitWidth = "0.62em",
+  cellHeight = "1.15em",
+  cellLine,
+  style,
 }: {
   value: number | null;
   className?: string;
@@ -24,29 +28,50 @@ export function RollingNumber({
   /** How long one reel turn takes, in ms. */
   duration?: number;
   easing?: string;
+  /** Width of each digit cell; condensed display fonts need less than the 0.62em default. */
+  digitWidth?: string;
+  /** Height of each digit window; set it close to the font's numeral height so neighbours never peek in mid-roll. */
+  cellHeight?: string;
+  /** Line height inside each window (defaults to cellHeight); lower it to lift a font that sits low. */
+  cellLine?: string;
+  style?: React.CSSProperties;
 }) {
-  if (value === null) return <span className={className}>—</span>;
+  if (value === null) return <span className={className} style={style}>—</span>;
   const text = value.toLocaleString("en-US");
 
   return (
-    <span className={`inline-flex overflow-hidden leading-none ${className}`} aria-label={text}>
+    <span className={`inline-flex leading-none ${className}`} style={style} aria-label={text}>
       {text.split("").map((ch, i) => {
         // Key from the right so each reel keeps its place value as the number grows.
         const key = text.length - i;
         if (ch < "0" || ch > "9") {
           return (
-            <span key={`s${key}`} aria-hidden="true" className={`inline-block h-[1.15em] leading-[1.15em] ${sepClassName}`}>
+            <span key={`s${key}`} aria-hidden="true" className={`inline-block ${sepClassName}`} style={{ height: cellHeight, lineHeight: cellLine ?? cellHeight }}>
               {ch}
             </span>
           );
         }
-        return <Reel key={`d${key}`} digit={ch.charCodeAt(0) - 48} duration={duration} easing={easing} />;
+        return <Reel key={`d${key}`} digit={ch.charCodeAt(0) - 48} duration={duration} easing={easing} width={digitWidth} height={cellHeight} line={cellLine ?? cellHeight} />;
       })}
     </span>
   );
 }
 
-function Reel({ digit, duration, easing }: { digit: number; duration: number; easing: string }) {
+function Reel({
+  digit,
+  duration,
+  easing,
+  width,
+  height,
+  line,
+}: {
+  digit: number;
+  duration: number;
+  easing: string;
+  width: string;
+  height: string;
+  line: string;
+}) {
   // pos is a slot on the 30-long reel; pos % 10 is the digit showing.
   const [pos, setPos] = useState(digit);
   const [animate, setAnimate] = useState(false);
@@ -67,7 +92,7 @@ function Reel({ digit, duration, easing }: { digit: number; duration: number; ea
   }
 
   return (
-    <span aria-hidden="true" className="relative inline-block h-[1.15em] w-[0.62em] overflow-hidden">
+    <span aria-hidden="true" className="relative inline-block overflow-hidden" style={{ width, height }}>
       <span
         className="absolute inset-x-0 top-0 flex flex-col"
         style={{
@@ -83,7 +108,7 @@ function Reel({ digit, duration, easing }: { digit: number; duration: number; ea
         }}
       >
         {REEL.map((n, i) => (
-          <span key={i} className="block h-[1.15em] text-center leading-[1.15em]">
+          <span key={i} className="block text-center" style={{ height, lineHeight: line }}>
             {n}
           </span>
         ))}

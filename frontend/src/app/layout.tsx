@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import "@fontsource/bebas-neue";
+import "@fontsource/ibm-plex-mono/500.css";
 import "./globals.css";
 
 // Self-hosted Geist (no Google Fonts fetch at build time).

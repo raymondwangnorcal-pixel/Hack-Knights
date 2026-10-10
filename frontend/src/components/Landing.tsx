@@ -3,7 +3,7 @@
 import { Suspense, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CounterBanner } from "@/components/CounterBanner";
+import { Intro } from "@/components/Intro";
 
 // One full-screen landing page with two sides, switched by a toggle near the top.
 // Starts on "For you" (light). "For prevention" (governments & nonprofits, dark) takes over
@@ -75,8 +75,17 @@ function LandingWithMemory() {
 function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => void }) {
   const dark = side === "prevention";
 
+  // The intro picks a side and scrolls down to it.
+  const pick = (s: Side) => {
+    onChange(s);
+    document.getElementById("start")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
+    <>
+    <Intro onPick={pick} />
     <main
+      id="start"
       className={`flex min-h-screen flex-1 flex-col transition-colors duration-500 ${
         dark ? "bg-black text-white" : "bg-white text-black"
       }`}
@@ -124,8 +133,6 @@ function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => vo
         </div>
       </header>
 
-      {/* Live counter banner (Climate Clock style), same on both sides */}
-      <CounterBanner />
 
       {/* Side content */}
       <section key={side} className="flex flex-1 flex-col justify-center gap-10 px-6 py-12 sm:px-12 animate-[fadein_400ms_ease-out]">
@@ -137,6 +144,7 @@ function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => vo
         chikungunya. Zika, West Nile and lymphatic filariasis excluded, so counts are a floor.
       </footer>
     </main>
+    </>
   );
 }
 

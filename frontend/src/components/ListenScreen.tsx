@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Spectrogram } from "@/components/Spectrogram";
 import classifyMock from "@/mocks/classify.json";
 import { WakeGate, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
+import { readAutoSpeak, setAutoSpeak, speak as speakLine, stopSpeaking, subscribeAutoSpeak, unlockAudio } from "@/lib/voice";
 import { LANGUAGES } from "@/lib/languages";
 import { DISEASE_LABEL, GENUS_INFO, carryInfo, listOr } from "@/lib/species";
 import type {
@@ -101,6 +102,8 @@ export function ListenScreen() {
   const startedAt = useRef(0);
   const run = useRef(0); // bumps on every start/stop so stale async work drops its result
   const replay = useRef<HTMLAudioElement | null>(null);
+  const spokenFor = useRef<string | null>(null); // detection already read aloud
+  const autoSpeak = useSyncExternalStore(subscribeAutoSpeak, readAutoSpeak, () => true);
 
   // District list + risk for both cities (the picker needs both).
   useEffect(() => {
@@ -220,6 +223,7 @@ export function ListenScreen() {
   }
 
   async function startListening() {
+    unlockAudio(); // inside the tap, so the result can speak later
     const id = ++run.current;
     releaseAudio();
     setError("");
@@ -241,12 +245,14 @@ export function ListenScreen() {
   }
 
   function stop() {
+    stopSpeaking();
     run.current++;
     releaseAudio();
     setStage(result ? "result" : "idle");
   }
 
   async function playSample() {
+    unlockAudio();
     const id = ++run.current;
     releaseAudio();
     setError("");
@@ -345,15 +351,27 @@ export function ListenScreen() {
 
   const shownPrevention = prevention?.key === preventionKey ? prevention.data : null;
 
-  async function speak() {
-    if (!shownPrevention) return;
-    const res = await fetch("/api/voice", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: shownPrevention.actions.filter((a) => !a.language || a.language === language).map((a) => a.title).join(". "), language }),
-    });
-    if (!res.ok) return;
-    new Audio(URL.createObjectURL(await res.blob())).play().catch(() => {});
+  const canSpeak = voiced.includes(language);
+  // The action titles Codex's panel shows in the chosen language (same filter as before).
+  const spokenTitles = useMemo(
+    () => (shownPrevention ? shownPrevention.actions.filter((a) => !a.language || a.language === language).map((a) => a.title) : []),
+    [shownPrevention, language],
+  );
+
+  // Read the result aloud once per detection, as soon as its prevention actions are in.
+  useEffect(() => {
+    if (!autoSpeak || !canSpeak || !shownPrevention || !result?.is_mosquito || !spokenTitles.length) return;
+    if (spokenFor.current === result.detection_id) return;
+    spokenFor.current = result.detection_id;
+    speakLine(spokenLine(result, spokenTitles, language), language);
+  }, [autoSpeak, canSpeak, shownPrevention, result, language, spokenTitles]);
+
+  function speak() {
+    if (!shownPrevention || !spokenTitles.length) return;
+    unlockAudio();
+    // With a result: species + actions; before one: just the district's actions.
+    const text = result?.is_mosquito ? spokenLine(result, spokenTitles, language) : spokenTitles.join(language === "zh" ? "。" : ". ");
+    speakLine(text, language);
   }
 
   const district = risk[place.country].find((d) => d.district === place.district) ?? null;
@@ -525,15 +543,28 @@ export function ListenScreen() {
             Prevention
           </h2>
           <div className="flex items-center gap-3">
-            {voiced.includes(language) && (
-              <button
-                onClick={speak}
-                disabled={!shownPrevention}
-                aria-label="Read the steps aloud"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#ECE6DA]/40 hover:border-[#ECE6DA] disabled:opacity-30"
-              >
-                <SpeakerIcon />
-              </button>
+            {canSpeak && (
+              <>
+                <button
+                  onClick={() => setAutoSpeak(!autoSpeak)}
+                  aria-pressed={autoSpeak}
+                  aria-label={autoSpeak ? "Auto-speak on: tap to mute" : "Auto-speak off: tap to turn on"}
+                  title={autoSpeak ? "Results are read aloud. Tap to mute." : "Muted. Tap to read results aloud."}
+                  className="flex h-9 items-center gap-2 rounded-full border border-[#ECE6DA]/30 px-3 text-[14px] hover:border-[#ECE6DA]"
+                  style={COND}
+                >
+                  {autoSpeak ? <SpeakerIcon /> : <SpeakerOffIcon />}
+                  <span className="max-sm:hidden">{autoSpeak ? "Auto" : "Muted"}</span>
+                </button>
+                <button
+                  onClick={speak}
+                  disabled={!shownPrevention}
+                  aria-label="Read the steps aloud"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[#ECE6DA]/40 hover:border-[#ECE6DA] disabled:opacity-30"
+                >
+                  <PlayIcon size={13} />
+                </button>
+              </>
             )}
             <label className="relative flex items-center gap-1.5 rounded-full border border-[#ECE6DA]/30 px-3.5 py-1.5 text-[15px]" style={COND}>
               <span>{LANGUAGES.find((l) => l.code === language)?.label}</span>
@@ -597,6 +628,19 @@ export function ListenScreen() {
       </section>
     </div>
   );
+}
+
+/** What gets read aloud: the mosquito, (in English) what it carries, then the actions. */
+function spokenLine(r: ClassifyResponse, steps: string[], language: Language): string {
+  const name = r.species ?? GENUS_INFO[r.genus ?? "other"].label;
+  const carry = carryInfo(r.species, r.genus, r.diseases);
+  const sep = language === "zh" ? "。" : ". ";
+  const body = steps.map((l) => l.replace(/[.。!！]+$/, "")).join(sep) + (language === "zh" ? "。" : ".");
+  if (language === "en" && carry.main) {
+    const disease = carry.main === "zika" || carry.main === "west_nile" ? DISEASE_LABEL[carry.main] : DISEASE_LABEL[carry.main].toLowerCase();
+    return `${name}. This mosquito can carry ${disease}. ${body}`;
+  }
+  return `${name}${sep}${body}`;
 }
 
 function Status({ stage, level, countdown }: { stage: Stage; level: number; countdown: number }) {
@@ -833,6 +877,15 @@ function WaveIcon() {
 function RecIcon() {
   return <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: RED }} aria-hidden="true" />;
 }
+function SpeakerOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
+      <path d="M17 9.5l5 5M22 9.5l-5 5" />
+    </svg>
+  );
+}
+
 function SpeakerIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

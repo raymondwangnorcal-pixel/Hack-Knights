@@ -175,64 +175,59 @@ function Num({ color, children }: { color: string; children: React.ReactNode }) 
   );
 }
 
-// The people behind the numbers. Justified rows: every photo keeps its full frame (no cropping),
-// and each row scales so its photos share one height. Two rows on desktop, rows of two on phones.
-type Photo = { src: string; alt: string; ar: number; w: number; h: number };
+// The people behind the numbers: a strip of photos that scrolls forever. Every photo keeps its
+// full frame (width follows its aspect ratio at a fixed height), the list is drawn twice so the
+// loop is seamless, it pauses on hover, and it holds still for people who turn off motion.
+type Photo = { src: string; alt: string; ar: number };
 
-const P: Record<string, Photo> = {
-  infant: { src: "/intro/zika-infant-full.jpg", alt: "An infant with microcephaly held by her mother", ar: 1.777, w: 1100, h: 619 },
-  eyes: { src: "/intro/red-eyes-full.jpg", alt: "A boy with bleeding in the whites of both eyes", ar: 1.345, w: 300, h: 223 },
-  oxygen: { src: "/intro/child-oxygen-full.jpg", alt: "A young child on oxygen in a hospital bed", ar: 1.779, w: 596, h: 335 },
-  jaundice: { src: "/intro/jaundice-full.jpg", alt: "A man with jaundice and bruising in a hospital bed", ar: 1.501, w: 1100, h: 733 },
-  torso: { src: "/intro/rash-torso-full.jpg", alt: "A rash covering a man's chest and arm", ar: 0.852, w: 511, h: 600 },
-  face: { src: "/intro/rash-face-full.jpg", alt: "A rash across a young woman's face and neck", ar: 1.777, w: 1100, h: 619 },
-};
-
-const DESKTOP_ROWS = [
-  [P.infant, P.eyes, P.oxygen],
-  [P.jaundice, P.torso, P.face],
-];
-const MOBILE_ROWS = [
-  [P.infant, P.eyes],
-  [P.oxygen, P.torso],
-  [P.jaundice, P.face],
+const PHOTOS: Photo[] = [
+  { src: "/intro/zika-infant-full.jpg", alt: "An infant with microcephaly held by her mother", ar: 1.777 },
+  { src: "/intro/ventilated-woman-full.jpg", alt: "A woman on a ventilator in intensive care", ar: 1.778 },
+  { src: "/intro/red-eyes-full.jpg", alt: "A boy with bleeding in the whites of both eyes", ar: 1.345 },
+  { src: "/intro/bed-net-girl-full.jpg", alt: "A girl asleep on a hospital cot under a mosquito net", ar: 1.5 },
+  { src: "/intro/jaundice-full.jpg", alt: "A man with jaundice and bruising in a hospital bed", ar: 1.501 },
+  { src: "/intro/bandaged-child-full.jpg", alt: "A small child with a bandaged head held by his mother", ar: 1.389 },
+  { src: "/intro/rash-torso-full.jpg", alt: "A rash covering a man's chest and arm", ar: 0.852 },
+  { src: "/intro/icu-teen-full.jpg", alt: "A teenage boy in intensive care with a central line and monitor leads", ar: 0.75 },
+  { src: "/intro/child-oxygen-full.jpg", alt: "A young child on oxygen in a hospital bed", ar: 1.779 },
+  { src: "/intro/crying-child-full.jpg", alt: "A crying child covered in dust", ar: 1.504 },
+  { src: "/intro/rash-face-full.jpg", alt: "A rash across a young woman's face and neck", ar: 1.777 },
+  { src: "/intro/ventilated-man-full.jpg", alt: "A man on a ventilator in a hospital bed", ar: 1.499 },
 ];
 
 function Collage() {
   return (
-    <section aria-label="People affected by mosquito-borne disease" className="border-t border-[#1C2624]/20 px-6 pt-5 pb-6 sm:px-10">
-      <h3 className="mb-3 text-[11px] uppercase tracking-[0.18em]" style={TYPE}>
+    <section aria-label="People affected by mosquito-borne disease" className="border-t border-[#1C2624]/20 pt-5 pb-6">
+      <h3 className="mb-3 px-6 text-[11px] uppercase tracking-[0.18em] sm:px-10" style={TYPE}>
         The people behind the numbers
       </h3>
-      <div className="hidden flex-col gap-1.5 md:flex">
-        {DESKTOP_ROWS.map((row, i) => (
-          <PhotoRow key={i} row={row} sizes="33vw" />
-        ))}
-      </div>
-      <div className="flex flex-col gap-1.5 md:hidden">
-        {MOBILE_ROWS.map((row, i) => (
-          <PhotoRow key={i} row={row} sizes="50vw" />
-        ))}
+      <div
+        className="photo-reel overflow-hidden"
+        style={{ maskImage: "linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent)" }}
+      >
+        <div className="photo-reel-track flex w-max">
+          {[0, 1].map((copy) => (
+            <div key={copy} className="flex gap-1.5 pr-1.5" aria-hidden={copy === 1}>
+              {PHOTOS.map((p) => (
+                <figure
+                  key={p.src}
+                  className="relative h-[180px] flex-none overflow-hidden md:h-[260px]"
+                  style={{ aspectRatio: p.ar }}
+                >
+                  <Image
+                    src={p.src}
+                    alt={copy === 0 ? p.alt : ""}
+                    fill
+                    loading="eager"
+                    sizes="(min-width: 768px) 470px, 320px"
+                    className="object-cover saturate-[0.9]"
+                  />
+                </figure>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </section>
-  );
-}
-
-function PhotoRow({ row, sizes }: { row: Photo[]; sizes: string }) {
-  return (
-    <div className="flex items-start gap-1.5">
-      {row.map((p) => (
-        // flex-grow by aspect ratio + matching aspect-ratio = equal heights with the whole frame shown
-        <figure key={p.src} className="relative min-w-0 overflow-hidden" style={{ flex: `${p.ar} 1 0%`, aspectRatio: p.ar }}>
-          <Image
-            src={p.src}
-            alt={p.alt}
-            fill
-            sizes={sizes}
-            className="object-cover saturate-[0.9] transition duration-500 hover:saturate-100"
-          />
-        </figure>
-      ))}
-    </div>
   );
 }

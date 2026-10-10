@@ -46,6 +46,21 @@ body {
   border-color: #262626;
 }
 
+/* Intro photo strip: two copies side by side, slid left by one copy's width, forever. */
+@keyframes photo-reel {
+  to { transform: translateX(-50%); }
+}
+.photo-reel-track {
+  animation: photo-reel 90s linear infinite;
+}
+.photo-reel:hover .photo-reel-track {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .photo-reel { overflow-x: auto; }
+  .photo-reel-track { animation: none; }
+}
+
 @keyframes fadein {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }

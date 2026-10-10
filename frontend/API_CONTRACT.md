@@ -24,9 +24,9 @@ Multipart fields, matching `backend/app/main.py`:
 | `client_id` | a UUID per clip, made on the phone, so retries are de-duplicated |
 | `recorded_at` | ISO time the recording started, with timezone (`2026-10-10T19:03:22.000Z`) |
 | `country` | `NG` or `BR` |
-| `district_id` | from `src/lib/districtIds.ts`: Lagos → `NG-LA-` + letters-only upper-case name (`NG-LA-OSHODIISOLO`); every São Paulo neighbourhood → `BR-3550308` (São Paulo city) until the lists are aligned |
+| `district_id` | resolved from the district's display name by `resolveDistrictId()` in `src/lib/backend.ts`, against the service's `/districts` list (e.g. `Shomolu` → `NG-LA-SHOMOLU`); an unknown name is a 422 |
 | `source` | `phone` |
-| `device` | `web` |
+| `device` | `web` for a recording; `sample` for the Sample button (the service stores those with `is_simulated = true`) |
 | `mime` | the clip's MIME type when known |
 
 **Fallbacks.** If the model can't answer (no `BUZZ_API_URL`, any non-2xx, 20 s timeout, unreachable), the route returns the mock result with `is_simulated: true` and `fallback_reason` (e.g. `"Model service returned 422"`); the screen labels it as a demo result. If the site's own route can't be reached, the screen does the same on the phone. `risk`, `detections` and `forecast` also serve mock data whenever FastAPI doesn't answer, so setting `BUZZ_API_URL` for classify never blanks the district list or the dashboard.

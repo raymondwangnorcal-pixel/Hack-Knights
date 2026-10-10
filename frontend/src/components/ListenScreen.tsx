@@ -167,8 +167,9 @@ export function ListenScreen() {
 
   /** Sends the clip for identification. Never throws for a server problem: if even our own
    *  route can't answer, it falls back to the labeled demo result so the screen never dead-ends. */
-  async function classify(audio: Blob, filename: string, id: number, recordedAt: string): Promise<ClassifyResponse> {
+  async function classify(audio: Blob, filename: string, id: number, recordedAt: string, device = "web"): Promise<ClassifyResponse> {
     const form = new FormData();
+    form.append("device", device); // "sample" uploads are stored as simulated, never as real detections
     form.append("audio", audio, filename);
     form.append("country", place.country);
     form.append("district", place.district);
@@ -279,7 +280,7 @@ export function ListenScreen() {
       setStage("sample");
       newClip(blob, buf.duration);
       // Identify while it plays; show the answer once the clip has finished.
-      const answer = classify(blob, SAMPLE[place.country].split("/").pop()!, id, new Date().toISOString());
+      const answer = classify(blob, SAMPLE[place.country].split("/").pop()!, id, new Date().toISOString(), "sample");
       answer.catch(() => {}); // handled below
       await new Promise<void>((done) => {
         src.onended = () => done();

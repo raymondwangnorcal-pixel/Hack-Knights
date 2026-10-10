@@ -1,5 +1,5 @@
 import { mockRisk } from "@/lib/mockData";
-import { getDetections } from "@/lib/backend";
+import { districtsById, getDetections } from "@/lib/backend";
 import { gatherPreventionContext, householdCandidates, preventionContextLine, type PreventionContext } from "@/lib/prevention";
 import { parseLanguage, promptName } from "@/lib/languages";
 import type { Country, Detection, DetectionsResponse, Genus, PreventionAction, PreventionRequest, PreventionResponse } from "@/lib/types";
@@ -133,13 +133,28 @@ async function chooseWithGemini(candidates: ReturnType<typeof householdCandidate
   }
 }
 
+// The listening screen's district list comes from /api/risk, i.e. the Data/ML service's districts
+// when BUZZ_API_URL is set, so validate against those; the mock list only when there is no service.
+async function findDistrict(country: Country, name: string): Promise<{ district: string; lat: number; lng: number } | null> {
+  const mock = () => mockRisk(country).districts.find((d) => d.district === name) ?? null;
+  if (!process.env.BUZZ_API_URL) return mock();
+  try {
+    const all = await districtsById();
+    const d = [...all.values()].find((x) => x.country === country && x.name === name);
+    return d ? { district: d.name, lat: d.lat, lng: d.lon } : null;
+  } catch (err) {
+    console.error("prevention: district lookup failed, using the sample list", String(err));
+    return mock();
+  }
+}
+
 export async function POST(request: Request) {
   let body: PreventionRequest;
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   if ((body.country !== "NG" && body.country !== "BR") || typeof body.district !== "string") {
     return Response.json({ error: "Choose a supported district" }, { status: 400 });
   }
-  const district = mockRisk(body.country).districts.find((d) => d.district === body.district);
+  const district = await findDistrict(body.country, body.district);
   if (!district) return Response.json({ error: "Choose a supported district" }, { status: 400 });
 
   const detection = body.detection;

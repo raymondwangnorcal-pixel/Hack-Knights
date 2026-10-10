@@ -25,6 +25,9 @@ from .species import diseases_for
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # a 10 s clip is well under 1 MB in any browser format
 
 COUNTRIES = ("BR", "NG", "US")
+# Uploads from these devices are demo data: the mock phone script and the listening screen's
+# Sample button (a canned clip). They are stored with is_simulated = true.
+SIMULATED_DEVICES = ("mock-phone", "sample")
 UNITS = {"dengue": "cases", "malaria": "cases", "west nile": "positive mosquito pools"}
 
 log = logging.getLogger("buzzcheck")
@@ -260,7 +263,7 @@ async def classify(
                RETURNING detection_id""",
             (recorded_at, client_id, country, district_id, source, result["is_mosquito"],
              result["species"], result["genus"], result["confidence"], diseases,
-             result["model_version"], device, device == "mock-phone"))  # mock uploads are demo data
+             result["model_version"], device, device in SIMULATED_DEVICES))
         row = await cur.fetchone()
         duplicate = row is None
         if duplicate:  # phone retry: answer with what we stored the first time

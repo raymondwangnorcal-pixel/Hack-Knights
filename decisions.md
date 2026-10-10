@@ -230,9 +230,18 @@ Decisions: one background `LISTEN` connection reconnects every 3 s on failure an
 
 **Data seen on 2026-10-10 (last 7 days):** NG 702 detections, BR 151, US 7. Note: Tiger's West Nile data was re-run after §8 was written (case history now ~50–130 pools per Brooklyn week; latest forecast batch 2026-10-10 21:36 UTC: Brooklyn 22.4 → 1.6 → 0.8 → 0), so §8's numbers are out of date.
 
+**Follow-up after merging the full frontend (PR #4), 2026-10-10:**
+
+| Decision | Why |
+| --- | --- |
+| `/api/prevention` validates districts against the service's district list (via `districtsById()`), not the mock list; mock only when `BUZZ_API_URL` is unset or the lookup fails. | The listening screen's dropdown comes from `/api/risk`, i.e. real Tiger names. Against the mock list, every São Paulo municipality and 12 of 20 Lagos LGAs (including the default, Shomolu) returned "Choose a supported district". |
+| Sample-button uploads are sent with `device='sample'` and stored with `is_simulated = true` (`SIMULATED_DEVICES` in `backend/app/main.py`). | They were stored as real detections. Three taps in a district would have made the prevention panel report "recent district detections" from a canned clip. **Needs a backend redeploy to take effect on Railway.** |
+| The prevention panel shows "Regional prevalence unavailable" for now. | Intended: it counts only real, confident detections, and every detection in Tiger is seeded. It switches on once real phone recordings arrive. |
+
 ## Change log
 - **2026-10-09/10:** Tiger schema and districts loaded; `/classify` service with mock phone; Snowflake set up over REST; dengue history and weather loaded; dengue forecast trained, back-tested and published to Tiger.
 - **2026-10-10:** Audio features and genus/species classifier trained; HumBug detector tried and rejected; tonality gate adopted; new pipeline wired into `/classify`; demo clips exported. This document started.
 - **2026-10-10:** Lagos malaria history simulated from real rainfall; malaria forecast trained in Snowflake; both diseases published to Tiger (`run_forecast.py` and `publish_to_tiger.py` now handle multiple diseases).
 - **2026-10-10:** New York (5 boroughs, `US`) added; West Nile positive pools simulated from real NYC temperature and forecast; all three diseases published to Tiger; 8 weeks of detections seeded; dashboard read endpoints and the live `/stream` added and verified; Cortex Search dropped (Gemini handles guidance).
 - **2026-10-10:** Frontend wired to the live backend through one Next.js adapter (`frontend/src/lib/backend.ts`); detections scattered inside real district outlines; timeline, districts and stream routes added; dashboard updates live; verified on all three maps.
+- **2026-10-10:** After PR #4: prevention district lookup fixed for real districts; Sample-button uploads flagged simulated; contract doc corrected.

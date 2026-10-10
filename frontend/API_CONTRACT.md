@@ -8,8 +8,9 @@ The frontend calls only the Next.js routes below. When `BUZZ_API_URL` is set, `c
 | `GET /api/risk?country=NG` | `GET /risk?country=NG` | | `RiskResponse` |
 | `GET /api/detections?country=NG&since=ISO` | `GET /detections?...` | | `DetectionsResponse` |
 | `GET /api/forecast?district=Alimosho` | `GET /forecast?district=...` | | `ForecastResponse` |
-| `POST /api/recommend` | (Gemini, called from Next.js) | JSON `RecommendRequest` | `{ text, source }` |
+| `POST /api/recommend` | (Gemini, called from Next.js) | JSON `RecommendRequest` (with `language`) | `{ text, source }` |
 | `POST /api/voice` | (ElevenLabs, called from Next.js) | JSON `{ text, language }` | `audio/mpeg` |
+| `GET /api/voice` | (reads env) | | `{ languages: [] }`: languages with a voice configured |
 
 ## `POST /classify` response
 
@@ -30,6 +31,30 @@ The frontend calls only the Next.js routes below. When `BUZZ_API_URL` is set, `c
 - `genus` is one of `anopheles`, `aedes`, `culex`, `other`.
 - `diseases` uses: `malaria`, `dengue`, `zika`, `chikungunya`, `yellow_fever`, `lymphatic_filariasis`, `west_nile`.
 - Audio arrives as WebM/Opus from Chrome or MP4/AAC from Safari; decode with ffmpeg or librosa.
+
+## Demo decisions
+
+- **Clip length:** 10 s.
+- **Location:** the phone sends only `country` and `district`, never GPS. `lat`/`lng` on a detection are the district's centre point plus a small random offset, attached server-side so the map has points to draw.
+- **Map level:** Lagos local government areas and São Paulo subprefectures, each drawn as one column at its centre point (no boundary files).
+- **Simulated data:** case numbers below city level are simulated for São Paulo; anything seeded carries `is_simulated: true`.
+
+## Languages
+
+`language` on `recommend` and `voice` is one of the codes below and defaults to `en`.
+
+| Code | Language |
+| --- | --- |
+| `en` | English |
+| `pt` | Portuguese (Brazil) |
+| `es` | Spanish |
+| `fr` | French |
+| `zh` | Mandarin (Simplified Chinese text) |
+| `yue` | Cantonese (Traditional Chinese text) |
+| `yo` | Yoruba |
+| `ha` | Hausa |
+
+Advice text is available in all eight. Speech is per language: the play button appears only for languages with `ELEVENLABS_VOICE_<CODE>` set, so a language stays text-only until its voice has been tested.
 
 ## Districts
 

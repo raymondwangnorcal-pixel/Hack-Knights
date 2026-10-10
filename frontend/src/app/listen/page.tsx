@@ -3,8 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { WakeGate, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
+import { LANGUAGES } from "@/lib/languages";
 import { DISEASE_LABEL, GENUS_INFO } from "@/lib/species";
-import type { ClassifyResponse, Country, RiskResponse } from "@/lib/types";
+import type {
+  ClassifyResponse,
+  Country,
+  Language,
+  RiskResponse,
+  VoiceLanguagesResponse,
+} from "@/lib/types";
 
 type Stage = "idle" | "listening" | "recording" | "uploading" | "result" | "error";
 
@@ -18,7 +25,10 @@ export default function ListenPage() {
   const [frame, setFrame] = useState<WakeGateFrame | null>(null);
   const [countdown, setCountdown] = useState(CLIP_SECONDS);
   const [result, setResult] = useState<ClassifyResponse | null>(null);
-  const [advice, setAdvice] = useState("");
+  const [language, setLanguage] = useState<Language>("en");
+  const [voiced, setVoiced] = useState<Language[]>([]);
+  // Keyed by detection and language so stale advice never shows after a switch.
+  const [adviceFor, setAdviceFor] = useState<{ key: string; text: string } | null>(null);
   const [error, setError] = useState("");
   const gate = useRef<WakeGate | null>(null);
 
@@ -34,6 +44,34 @@ export default function ListenPage() {
 
   useEffect(() => () => gate.current?.stop(), []);
 
+  useEffect(() => {
+    fetch("/api/voice")
+      .then((r) => r.json())
+      .then((data: VoiceLanguagesResponse) => setVoiced(data.languages ?? []))
+      .catch(() => setVoiced([]));
+  }, []);
+
+  const adviceKey = result?.is_mosquito ? `${result.detection_id}:${language}` : "";
+  const advice = adviceFor?.key === adviceKey ? adviceFor.text : "";
+
+  useEffect(() => {
+    if (!result?.is_mosquito) return;
+    const key = `${result.detection_id}:${language}`;
+    fetch("/api/recommend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "species_advice",
+        species: result.species,
+        genus: result.genus,
+        language,
+      }),
+    })
+      .then((r) => r.json())
+      .then((d) => setAdviceFor({ key, text: d.text ?? "" }))
+      .catch(() => setAdviceFor({ key, text: "" }));
+  }, [result, language]);
+
   async function classify(audio: Blob) {
     setStage("uploading");
     const form = new FormData();
@@ -45,13 +83,6 @@ export default function ListenPage() {
     const data = (await res.json()) as ClassifyResponse;
     setResult(data);
     setStage("result");
-
-    const rec = await fetch("/api/recommend", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "species_advice", species: data.species, genus: data.genus }),
-    });
-    setAdvice((await rec.json()).text ?? "");
   }
 
   async function onTrigger() {
@@ -77,7 +108,6 @@ export default function ListenPage() {
   async function startListening() {
     setError("");
     setResult(null);
-    setAdvice("");
     try {
       gate.current = new WakeGate();
       await gate.current.start(setFrame, onTrigger);
@@ -103,11 +133,11 @@ export default function ListenPage() {
   }
 
   async function playVoice() {
-    const text = advice || (result ? GENUS_INFO[result.genus ?? "other"].nextSteps.join(" ") : "");
+    if (!advice) return;
     const res = await fetch("/api/voice", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, language: "en" }),
+      body: JSON.stringify({ text: advice, language }),
     });
     if (!res.ok) {
       setError((await res.json()).error ?? "Voice unavailable");
@@ -147,6 +177,21 @@ export default function ListenPage() {
           ))}
         </select>
       </div>
+
+      <label className="flex items-center gap-2 text-sm">
+        <span className="opacity-60">Advice language</span>
+        <select
+          className="flex-1 rounded-lg border px-3 py-2"
+          value={language}
+          onChange={(e) => setLanguage(e.target.value as Language)}
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+      </label>
 
       {(stage === "idle" || stage === "result" || stage === "error") && (
         <div className="flex flex-col gap-3">
@@ -232,11 +277,19 @@ export default function ListenPage() {
               )}
               <div>
                 <p className="text-sm opacity-60">What to do</p>
-                <p className="mt-1">{advice || genusInfo.nextSteps.join(" ")}</p>
+                <p className="mt-1" lang={advice ? language : "en"}>
+                  {advice || genusInfo.nextSteps.join(" ")}
+                </p>
               </div>
-              <button onClick={playVoice} className="rounded-full border py-2 text-sm">
-                ▶ Play advice
-              </button>
+              {voiced.includes(language) && (
+                <button
+                  onClick={playVoice}
+                  disabled={!advice}
+                  className="rounded-full border py-2 text-sm disabled:opacity-40"
+                >
+                  ▶ Play advice
+                </button>
+              )}
             </>
           )}
         </section>

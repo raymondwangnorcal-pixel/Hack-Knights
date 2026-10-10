@@ -1,13 +1,14 @@
+import { parseLanguage, promptName } from "@/lib/languages";
 import { GENUS_INFO } from "@/lib/species";
 import type { RecommendRequest, RecommendResponse } from "@/lib/types";
 
 // Prompts are owned by the Pitch lead; swap the text in buildPrompt() when theirs are ready.
 function buildPrompt(req: RecommendRequest): string {
-  const lang = req.language ?? "en";
+  const lang = promptName(parseLanguage(req.language));
   if (req.kind === "species_advice") {
     const info = GENUS_INFO[req.genus ?? "other"];
     return [
-      `You are a public health assistant. Reply in language code "${lang}".`,
+      `You are a public health assistant. Reply only in ${lang}.`,
       `A phone just detected a mosquito: ${req.species ?? info.label} (genus ${info.label}).`,
       `It can carry: ${info.diseases.join(", ") || "unknown"}.`,
       `Rewrite ONLY these steps as 3 short, friendly sentences. Do not add new medical advice:`,
@@ -15,7 +16,7 @@ function buildPrompt(req: RecommendRequest): string {
     ].join("\n");
   }
   return [
-    `You are advising a district health team. Reply in language code "${lang}".`,
+    `You are advising a district health team. Reply only in ${lang}.`,
     `District: ${req.district}, country: ${req.country}.`,
     `Write 4 specific, practical prevention actions for the next 2 weeks`,
     `(larviciding, net or repellent distribution, community messaging, clinic readiness).`,

@@ -3,6 +3,7 @@
 // See frontend/API_CONTRACT.md for the human-readable version.
 
 export type Country = "BR" | "NG";
+export type Language = "en" | "pt" | "es" | "fr" | "zh" | "yue" | "yo" | "ha";
 export type Genus = "anopheles" | "aedes" | "culex" | "other";
 export type Disease =
   | "malaria"
@@ -86,7 +87,7 @@ export interface RecommendRequest {
   genus?: Genus | null;
   district?: string;
   country?: Country;
-  language?: string; // e.g. "en", "pt", "yo", "ha"
+  language?: Language; // defaults to "en"
 }
 export interface RecommendResponse {
   text: string;
@@ -96,5 +97,10 @@ export interface RecommendResponse {
 /** POST /api/voice -> returns audio/mpeg bytes */
 export interface VoiceRequest {
   text: string;
-  language?: string;
+  language?: Language;
+}
+
+/** GET /api/voice -> languages that have a voice configured */
+export interface VoiceLanguagesResponse {
+  languages: Language[];
 }

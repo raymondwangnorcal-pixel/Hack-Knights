@@ -9,7 +9,7 @@ Generator (deterministic, seed 7):
   heat(t) = max(0, mean temperature over weeks t-2 .. t-1  minus 18 C) / 8      (Culex + virus need warmth)
   amp(t)  = min(1, warm weeks so far this year / 10)                            (virus builds up in birds over summer)
   expected(t) = base_borough * heat^1.5 * amp;  pools ~ Poisson(expected)
-  base_borough ~ lognormal around 6 pools/week (illustrative, not a sourced rate)
+  base_borough ~ lognormal around 150 pools/week (illustrative, not a sourced rate)
 Writes RAW.CASES_SIMULATED (district_id, week_start, disease='west nile', cases, generator).
 """
 import json, os, sys
@@ -53,7 +53,7 @@ def main():
 
     out = []
     for did in sorted(series):
-        base = float(np.exp(rng.normal(np.log(6), 0.4)))
+        base = float(np.exp(rng.normal(np.log(150), 0.2)))
         s = series[did]
         warm_weeks, year = 0, None
         for i in range(LAG, len(s)):

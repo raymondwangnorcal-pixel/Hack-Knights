@@ -175,20 +175,27 @@ function Num({ color, children }: { color: string; children: React.ReactNode }) 
   );
 }
 
-// The people behind the numbers. Tiles crop each photo with object-position;
-// on desktop a 12-column mosaic two rows tall, on phones a two-column grid.
-const PHOTOS: { src: string; alt: string; tile: string; focus: string }[] = [
-  {
-    src: "/intro/zika-infant.jpg",
-    alt: "An infant with microcephaly held by her mother",
-    tile: "col-span-2 row-span-2 md:col-span-4",
-    focus: "50% 35%",
-  },
-  { src: "/intro/child-oxygen.jpg", alt: "A young child on oxygen in a hospital bed", tile: "md:col-span-4", focus: "20% 25%" },
-  { src: "/intro/jaundice.jpg", alt: "A man with jaundice and bruising in a hospital bed", tile: "md:col-span-4", focus: "15% 30%" },
-  { src: "/intro/red-eyes.jpg", alt: "A boy with bleeding in the whites of both eyes", tile: "md:col-span-2", focus: "50% 30%" },
-  { src: "/intro/rash-torso.jpg", alt: "A rash covering a man's chest and arm", tile: "md:col-span-3", focus: "50% 40%" },
-  { src: "/intro/rash-face.jpg", alt: "A rash across a young woman's face and neck", tile: "col-span-2 md:col-span-3", focus: "35% 25%" },
+// The people behind the numbers. Justified rows: every photo keeps its full frame (no cropping),
+// and each row scales so its photos share one height. Two rows on desktop, rows of two on phones.
+type Photo = { src: string; alt: string; ar: number; w: number; h: number };
+
+const P: Record<string, Photo> = {
+  infant: { src: "/intro/zika-infant-full.jpg", alt: "An infant with microcephaly held by her mother", ar: 1.777, w: 1100, h: 619 },
+  eyes: { src: "/intro/red-eyes-full.jpg", alt: "A boy with bleeding in the whites of both eyes", ar: 1.345, w: 300, h: 223 },
+  oxygen: { src: "/intro/child-oxygen-full.jpg", alt: "A young child on oxygen in a hospital bed", ar: 1.779, w: 596, h: 335 },
+  jaundice: { src: "/intro/jaundice-full.jpg", alt: "A man with jaundice and bruising in a hospital bed", ar: 1.501, w: 1100, h: 733 },
+  torso: { src: "/intro/rash-torso-full.jpg", alt: "A rash covering a man's chest and arm", ar: 0.852, w: 511, h: 600 },
+  face: { src: "/intro/rash-face-full.jpg", alt: "A rash across a young woman's face and neck", ar: 1.777, w: 1100, h: 619 },
+};
+
+const DESKTOP_ROWS = [
+  [P.infant, P.eyes, P.oxygen],
+  [P.jaundice, P.torso, P.face],
+];
+const MOBILE_ROWS = [
+  [P.infant, P.eyes],
+  [P.oxygen, P.torso],
+  [P.jaundice, P.face],
 ];
 
 function Collage() {
@@ -197,20 +204,35 @@ function Collage() {
       <h3 className="mb-3 text-[11px] uppercase tracking-[0.18em]" style={TYPE}>
         The people behind the numbers
       </h3>
-      <div className="grid auto-rows-[120px] grid-cols-2 gap-1.5 md:auto-rows-[132px] md:grid-cols-12">
-        {PHOTOS.map((p) => (
-          <figure key={p.src} className={`relative overflow-hidden bg-[#1C2624]/10 ${p.tile}`}>
-            <Image
-              src={p.src}
-              alt={p.alt}
-              fill
-              sizes="(min-width: 768px) 33vw, 50vw"
-              className="object-cover grayscale-[15%] sepia-[12%] transition duration-500 hover:grayscale-0 hover:sepia-0"
-              style={{ objectPosition: p.focus }}
-            />
-          </figure>
+      <div className="hidden flex-col gap-1.5 md:flex">
+        {DESKTOP_ROWS.map((row, i) => (
+          <PhotoRow key={i} row={row} sizes="33vw" />
+        ))}
+      </div>
+      <div className="flex flex-col gap-1.5 md:hidden">
+        {MOBILE_ROWS.map((row, i) => (
+          <PhotoRow key={i} row={row} sizes="50vw" />
         ))}
       </div>
     </section>
+  );
+}
+
+function PhotoRow({ row, sizes }: { row: Photo[]; sizes: string }) {
+  return (
+    <div className="flex items-start gap-1.5">
+      {row.map((p) => (
+        // flex-grow by aspect ratio + matching aspect-ratio = equal heights with the whole frame shown
+        <figure key={p.src} className="relative min-w-0 overflow-hidden" style={{ flex: `${p.ar} 1 0%`, aspectRatio: p.ar }}>
+          <Image
+            src={p.src}
+            alt={p.alt}
+            fill
+            sizes={sizes}
+            className="object-cover saturate-[0.9] transition duration-500 hover:saturate-100"
+          />
+        </figure>
+      ))}
+    </div>
   );
 }

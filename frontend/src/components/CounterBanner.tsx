@@ -10,8 +10,8 @@ import {
 } from "@/lib/burden";
 
 // Full-bleed counter banner in the style of climateclock.world: stacked solid-color bands,
-// uppercase mono labels, one huge live number per band, and a scrolling fact wire underneath.
-// Looks the same on both sides of the landing page.
+// uppercase mono labels and one live number per band. On desktop the two bands sit side by side,
+// each laid out as a single row. Looks the same on both sides of the landing page.
 
 /** Seconds since Jan 1 (UTC) of the current year, refreshed every second. Null until mounted. */
 function useYearClock(): { secs: number; year: number } | null {
@@ -32,16 +32,6 @@ function useYearClock(): { secs: number; year: number } | null {
   return clock;
 }
 
-const WIRE = [
-  "Mosquitoes kill more people than any other animal on Earth",
-  "Malaria: ~282 million cases and ~610,000 deaths a year (WHO, 2025)",
-  "Dengue hit a record 14 million reported cases in 2024",
-  "Nigeria loses more people to malaria than any other country",
-  "Brazil logged over 6 million probable dengue cases in 2024",
-  "A mosquito beats its wings hundreds of times a second. Mozzy listens for it",
-  "Every species carries different diseases. Knowing which one is in the room changes what you do",
-];
-
 export function CounterBanner() {
   const clock = useYearClock();
   const perYear = (annual: number) =>
@@ -60,7 +50,7 @@ export function CounterBanner() {
       <Band
         tone="bg-[#ffb224] text-black"
         title="Infected"
-        caption={`by mosquito-borne disease ${since}`}
+        caption={since}
         value={perYear(totalCases)}
         meta={<span>+{CASES_PER_SECOND.toFixed(1)} people / second</span>}
         breakdown={DISEASES.map((d) => ({ name: d.name, value: perYear(d.cases) }))}
@@ -68,18 +58,19 @@ export function CounterBanner() {
       <Band
         tone="bg-[#e5484d] text-white"
         title="Killed"
-        caption={`by mosquito-borne disease ${since}`}
+        caption={since}
         value={perYear(totalDeaths)}
         meta={
           <span>
-            1 death every {Math.round(SECONDS_PER_DEATH)}s · avg. next in{" "}
+            1 death every {Math.round(SECONDS_PER_DEATH)}s
+            <br />
+            avg. next in{" "}
             <span className="tabular-nums">{nextDeath === null ? "—" : `0:${String(nextDeath).padStart(2, "0")}`}</span>
           </span>
         }
         breakdown={DISEASES.map((d) => ({ name: d.name, value: perYear(d.deaths) }))}
       />
       </div>
-      <Wire items={WIRE} />
     </section>
   );
 }
@@ -100,22 +91,21 @@ function Band({
   breakdown: { name: string; value: number | null }[];
 }) {
   return (
-    <div className={`${tone} flex flex-col gap-2 px-6 py-5 sm:px-12 lg:gap-1 lg:px-10 lg:py-3`}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 uppercase">
-        <span className="flex flex-col">
-          <span className="text-xl font-bold tracking-wide lg:text-base">{title}</span>
-          <span className="text-[11px] leading-tight opacity-75">{caption}</span>
-        </span>
-        <span className="text-xs">{meta}</span>
-      </div>
+    <div className={`${tone} flex flex-col gap-2 px-6 py-5 sm:px-12 lg:flex-row lg:items-center lg:gap-6 lg:px-8 lg:py-3`}>
+      <span className="flex flex-col uppercase">
+        <span className="text-xl font-bold tracking-wide lg:text-sm">{title}</span>
+        <span className="text-[11px] leading-tight opacity-75">by mosquito-borne disease</span>
+        <span className="text-[11px] leading-tight opacity-75">{caption}</span>
+      </span>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
       <RollingNumber
         value={value}
-        className="text-[clamp(2.5rem,8.5vw,4.75rem)] font-bold tracking-tighter lg:text-[clamp(2rem,3.2vw,3.25rem)]"
+        className="text-[clamp(2.5rem,8.5vw,4.75rem)] font-bold tracking-tighter lg:text-[clamp(1.75rem,2.6vw,2.5rem)]"
         sepClassName="font-sans -mr-[0.04em]"
       />
 
+      <div className="flex flex-col items-start gap-1.5 text-xs uppercase lg:ml-auto lg:items-end lg:text-right">
+        <span className="text-[11px] leading-tight">{meta}</span>
       {/* Breakdown sits beside the number and opens as a popover, so the band never grows. */}
       <div className="text-xs uppercase">
         <details className="group relative">
@@ -135,27 +125,6 @@ function Band({
           </ul>
         </details>
       </div>
-      </div>
-    </div>
-  );
-}
-
-function Wire({ items }: { items: string[] }) {
-  const line = items.map((t) => (
-    <span key={t} className="flex items-center gap-6 pr-6">
-      {t}
-      <span aria-hidden="true" className="text-[#ffb224]">●</span>
-    </span>
-  ));
-  return (
-    <div className="flex items-stretch overflow-hidden bg-black text-xs uppercase text-white">
-      <span className="z-10 flex shrink-0 items-center bg-white px-3 py-2 font-bold text-black">Mozzy wire</span>
-      <div className="relative flex-1 overflow-hidden py-2">
-        {/* Two copies back to back so the loop is seamless. */}
-        <div className="marquee flex w-max whitespace-nowrap">
-          <div className="flex">{line}</div>
-          <div className="flex" aria-hidden="true">{line}</div>
-        </div>
       </div>
     </div>
   );

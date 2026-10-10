@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { RollingNumber } from "@/components/RollingNumber";
 
@@ -134,13 +133,13 @@ export function StickyBar({
           <button onClick={() => onPick("prevention")} className="hidden px-2 py-1 text-lg tracking-wider whitespace-nowrap hover:underline sm:block">
             For prevention
           </button>
-          <Link
-            href="/listen"
+          <button
+            onClick={() => onPick("you")}
             className="ml-1 rounded-sm px-5 py-2.5 text-lg tracking-wider whitespace-nowrap text-[#13110F] transition-opacity hover:opacity-85"
             style={{ backgroundColor: INK }}
           >
             Start listening
-          </Link>
+          </button>
         </nav>
       </div>
 

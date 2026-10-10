@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   }
 
   const upstream = new FormData();
-  upstream.append("audio", audio, "clip.webm");
+  upstream.append("audio", audio, audio instanceof File && audio.name ? audio.name : "clip.webm");
   upstream.append("country", country);
   upstream.append("district", district);
 

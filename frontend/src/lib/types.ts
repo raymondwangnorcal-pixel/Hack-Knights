@@ -88,6 +88,8 @@ export interface RecommendRequest {
   district?: string;
   country?: Country;
   language?: Language; // defaults to "en"
+  /** species_advice only: "paragraph" (default) or "steps" = exactly 3 short lines, one per step */
+  format?: "paragraph" | "steps";
 }
 export interface RecommendResponse {
   text: string;

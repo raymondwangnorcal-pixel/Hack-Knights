@@ -30,7 +30,11 @@ The frontend calls only the Next.js routes below. When `BUZZ_API_URL` is set, `c
 - `species` is `null` when only the genus clears the threshold.
 - `genus` is one of `anopheles`, `aedes`, `culex`, `other`.
 - `diseases` uses: `malaria`, `dengue`, `zika`, `chikungunya`, `yellow_fever`, `lymphatic_filariasis`, `west_nile`.
-- Audio arrives as WebM/Opus from Chrome or MP4/AAC from Safari; decode with ffmpeg or librosa.
+- Audio arrives as WebM/Opus from Chrome or MP4/AAC from Safari, or WAV from the listening screen's Sample button; decode with ffmpeg or librosa. The upload keeps its original filename and extension.
+
+## `POST /api/recommend` with `format: "steps"`
+
+For `kind: "species_advice"`, `format: "steps"` returns `text` as exactly three short lines (one step per line, no numbering), translated from the `steps` list in `src/lib/species.ts`. The listening screen's Prevention panel uses this; omitting `format` keeps the original 3-sentence paragraph.
 
 ## Demo decisions
 

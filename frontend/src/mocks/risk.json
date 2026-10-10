@@ -28,5 +28,17 @@
       { "district": "Sé", "country": "BR", "lat": -23.5505, "lng": -46.6333, "risk_score": 41, "rank": 7, "detections_7d": 39, "cases_14d": 590, "weather_factor": 0.63, "main_disease": "dengue" },
       { "district": "Pinheiros", "country": "BR", "lat": -23.5614, "lng": -46.7016, "risk_score": 33, "rank": 8, "detections_7d": 27, "cases_14d": 420, "weather_factor": 0.6, "main_disease": "dengue" }
     ]
+  },
+  "US": {
+    "country": "US",
+    "updated_at": "2026-10-10T09:00:00Z",
+    "is_simulated": true,
+    "districts": [
+      { "district": "Manhattan", "country": "US", "lat": 40.7831, "lng": -73.9712, "risk_score": 75, "rank": 1, "detections_7d": 89, "cases_14d": 1240, "weather_factor": 0.65, "main_disease": "west_nile" },
+      { "district": "Queens", "country": "US", "lat": 40.7615, "lng": -73.8237, "risk_score": 68, "rank": 2, "detections_7d": 72, "cases_14d": 1050, "weather_factor": 0.62, "main_disease": "west_nile" },
+      { "district": "Brooklyn", "country": "US", "lat": 40.6782, "lng": -73.9442, "risk_score": 62, "rank": 3, "detections_7d": 58, "cases_14d": 890, "weather_factor": 0.58, "main_disease": "west_nile" },
+      { "district": "The Bronx", "country": "US", "lat": 40.8448, "lng": -73.8648, "risk_score": 55, "rank": 4, "detections_7d": 44, "cases_14d": 720, "weather_factor": 0.54, "main_disease": "west_nile" },
+      { "district": "Staten Island", "country": "US", "lat": 40.5795, "lng": -74.1502, "risk_score": 42, "rank": 5, "detections_7d": 31, "cases_14d": 510, "weather_factor": 0.5, "main_disease": "west_nile" }
+    ]
   }
 }

@@ -1,9 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { DISEASE_LABEL } from "@/lib/species";
-import type { Country, DistrictRisk, ForecastResponse, RiskResponse } from "@/lib/types";
+import RiskHeatMap from "@/components/RiskHeatMap";
+import ForecastChart from "@/components/ForecastChart";
+import { CITIES, CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus } from "@/lib/cities";
+import type {
+  Country,
+  DetectionsResponse,
+  DistrictRisk,
+  ForecastResponse,
+  RiskResponse,
+} from "@/lib/types";
+
+// Same look as the home page intro.
+const BG = "#13110F";
+const INK = "#ECE6DA";
+const ORANGE = "#F07636";
+const RED = "#E0434A";
+const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
+const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 
 // v0 dashboard: ranked districts, a 2D risk map, forecast and Gemini plan.
 // The three.js 3D columns and time slider replace <RiskMap2D> once this works end to end.
@@ -12,6 +29,9 @@ export default function DashboardPage() {
   const [country, setCountry] = useState<Country>("NG");
   const [risk, setRisk] = useState<RiskResponse | null>(null);
   const [selected, setSelected] = useState<DistrictRisk | null>(null);
+  const [detections, setDetections] = useState<DetectionsResponse | null>(null);
+  const [activeCity, setActiveCity] = useState<City | null>(null);
+  const [focus, setFocus] = useState<MapFocus | null>(null);
   // Keyed by district so stale results never show for a newly selected district.
   const [forecastFor, setForecastFor] = useState<ForecastResponse | null>(null);
   const [planFor, setPlanFor] = useState<{ district: string; text: string } | null>(null);
@@ -22,7 +42,11 @@ export default function DashboardPage() {
       .then((data: RiskResponse) => {
         setRisk(data);
         setSelected(data.districts[0] ?? null);
-      });
+        const since = new Date(Date.parse(data.updated_at) - 7 * 864e5).toISOString();
+        return fetch(`/api/detections?country=${data.country}&since=${encodeURIComponent(since)}`);
+      })
+      .then((r) => r.json())
+      .then(setDetections);
   }, [country]);
 
   useEffect(() => {
@@ -40,166 +64,205 @@ export default function DashboardPage() {
       .then((d) => setPlanFor({ district, text: d.text ?? "" }));
   }, [selected]);
 
-  const forecast = forecastFor?.district === selected?.district ? forecastFor : null;
-  const plan = planFor && planFor.district === selected?.district ? planFor.text : "";
+  // Keep the previous district's results on screen (dimmed) while the new ones load,
+  // so the page height stays put and the scroll position doesn't jump.
+  const forecastStale = !!forecastFor && forecastFor.district !== selected?.district;
+  const planStale = !!planFor && planFor.district !== selected?.district;
 
-  const city = country === "NG" ? "Lagos" : "São Paulo";
-  const disease = country === "NG" ? "malaria" : "dengue";
+  const city = country === "NG" ? "Lagos" : country === "BR" ? "São Paulo" : "New York";
+  const disease = country === "NG" ? "malaria" : country === "BR" ? "dengue" : "west_nile";
+
+  const selectCity = (c: City) => {
+    setActiveCity(c);
+    setFocus({ key: Date.now(), lat: c.lat, lng: c.lng, zoom: CITY_ZOOM });
+  };
+  const backToCities = () => {
+    setActiveCity(null);
+    setFocus({ key: Date.now(), reset: true });
+  };
+  const selectDistrict = (d: DistrictRisk) => {
+    setSelected(d);
+    setFocus({ key: Date.now(), lat: d.lat, lng: d.lng, zoom: DISTRICT_ZOOM });
+  };
+  const changeCountry = (c: Country) => {
+    setCountry(c);
+    setActiveCity(null);
+    setFocus(null);
+  };
 
   return (
-    <div className="theme-dark flex min-h-screen flex-1 flex-col">
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <Link href="/?side=prevention" className="text-sm opacity-60">← Mozzy</Link>
-          <h1 className="text-2xl font-semibold">
-            {city} · {disease} risk
-          </h1>
+    <div
+      className="flex min-h-screen flex-1 flex-col"
+      style={
+        {
+          backgroundColor: BG,
+          color: INK,
+          colorScheme: "dark",
+          "--background": BG,
+          "--foreground": INK,
+        } as CSSProperties
+      }
+    >
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <Link href="/?side=prevention" className="text-xs uppercase tracking-widest opacity-60" style={TYPE}>
+              ← Mozzy
+            </Link>
+            <h1 className="mt-1 text-5xl leading-none tracking-wide uppercase" style={DISPLAY}>
+              <span style={{ color: ORANGE }}>{city}</span> · {disease.replace("_", " ")} risk
+            </h1>
+          </div>
           {risk?.is_simulated && (
-            <span className="rounded-full bg-current/10 px-2 py-0.5 text-xs">Simulated data</span>
-          )}
-        </div>
-        <div className="flex rounded-full border p-1">
-          {(["NG", "BR"] as Country[]).map((c) => (
-            <button
-              key={c}
-              onClick={() => setCountry(c)}
-              className={`rounded-full px-4 py-1 text-sm ${
-                country === c ? "bg-foreground text-background" : ""
-              }`}
+            <span
+              className="rounded-sm border px-2 py-1 text-[11px] uppercase tracking-widest"
+              style={{ ...TYPE, borderColor: `${INK}33`, color: `${INK}99` }}
             >
-              {c === "NG" ? "Nigeria" : "Brazil"}
-            </button>
-          ))}
-        </div>
-      </header>
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <section className="rounded-2xl border p-4">
-          {risk && (
-            <RiskMap2D
-              districts={risk.districts}
-              selected={selected?.district}
-              onSelect={setSelected}
-            />
+              Simulated data
+            </span>
           )}
-        </section>
+        </header>
 
-        <aside className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold opacity-60">Treat this week</h2>
-          {risk?.districts.map((d) => (
-            <button
-              key={d.district}
-              onClick={() => setSelected(d)}
-              className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left ${
-                selected?.district === d.district ? "border-foreground" : ""
-              }`}
-            >
-              <span>
-                <span className="mr-2 opacity-50">{d.rank}</span>
-                {d.district}
-              </span>
-              <span className="text-sm tabular-nums">
-                {d.risk_score} · {d.detections_7d} buzzes / 7d
-              </span>
-            </button>
-          ))}
-        </aside>
-      </div>
-
-      {selected && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border p-4">
-            <h2 className="font-semibold">
-              {selected.district}: {DISEASE_LABEL[selected.main_disease]} cases, next 4 weeks
-            </h2>
-            {forecast ? (
-              <ForecastBars forecast={forecast} />
-            ) : (
-              <p className="opacity-60">Loading forecast…</p>
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <section className="rounded-sm border p-4" style={{ borderColor: `${INK}33` }}>
+            <div className="mb-3 grid grid-cols-3 gap-2">
+              {(["NG", "BR", "US"] as Country[]).map((c) => {
+                const active = country === c;
+                return (
+                  <button
+                    key={c}
+                    onClick={() => changeCountry(c)}
+                    aria-pressed={active}
+                    className="rounded-sm border px-4 py-2 text-lg uppercase tracking-widest transition-colors"
+                    style={{
+                      ...DISPLAY,
+                      borderColor: active ? ORANGE : `${INK}33`,
+                      backgroundColor: active ? ORANGE : "transparent",
+                      color: active ? BG : `${INK}b3`,
+                    }}
+                  >
+                    {c === "NG" ? "Nigeria" : c === "BR" ? "Brazil" : "USA"}
+                  </button>
+                );
+              })}
+            </div>
+            {risk && (
+              <RiskHeatMap
+                districts={risk.districts}
+                detections={detections?.country === risk.country ? detections.detections : []}
+                selected={selected?.district}
+                onSelect={selectDistrict}
+                onCitySelect={selectCity}
+                focus={focus}
+              />
             )}
           </section>
-          <section className="rounded-2xl border p-4">
-            <h2 className="font-semibold">Recommended actions</h2>
-            <p className="mt-2 whitespace-pre-line">{plan || "Generating…"}</p>
-          </section>
+
+          <aside className="flex flex-col gap-2">
+            {activeCity ? (
+              <>
+                <button
+                  onClick={backToCities}
+                  className="self-start text-xs uppercase tracking-widest opacity-70 hover:opacity-100"
+                  style={TYPE}
+                >
+                  ← All cities
+                </button>
+                <h2 className="text-3xl tracking-wide uppercase" style={DISPLAY}>
+                  <span style={{ color: ORANGE }}>{activeCity.name}</span> · locations
+                </h2>
+                {activeCity.hasData ? (
+                  risk?.districts.map((d) => {
+                    const active = selected?.district === d.district;
+                    return (
+                      <button
+                        key={d.district}
+                        onClick={() => selectDistrict(d)}
+                        className="flex items-center justify-between rounded-sm border px-3 py-2 text-left"
+                        style={{
+                          borderColor: active ? ORANGE : `${INK}33`,
+                          backgroundColor: active ? `${ORANGE}1a` : "transparent",
+                        }}
+                      >
+                        <span className="text-lg uppercase tracking-wide" style={DISPLAY}>
+                          <span className="mr-2" style={{ color: ORANGE }}>
+                            {d.rank}
+                          </span>
+                          {d.district}
+                        </span>
+                        <span className="text-xs tabular-nums" style={{ ...TYPE, color: `${INK}b3` }}>
+                          {d.risk_score}/100 · {d.detections_7d} buzzes / 7d
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm leading-relaxed" style={{ ...TYPE, color: `${INK}99` }}>
+                    No detection data for {activeCity.name} yet.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <h2 className="text-3xl tracking-wide uppercase" style={DISPLAY}>
+                  Pick a <span style={{ color: RED }}>city</span>
+                </h2>
+                {CITIES[country].map((c) => (
+                  <button
+                    key={c.name}
+                    onClick={() => selectCity(c)}
+                    className="flex items-center justify-between rounded-sm border px-3 py-2 text-left"
+                    style={{ borderColor: c.hasData ? `${ORANGE}80` : `${INK}33` }}
+                  >
+                    <span
+                      className="text-lg uppercase tracking-wide"
+                      style={{ ...DISPLAY, color: c.hasData ? ORANGE : INK }}
+                    >
+                      {c.name}
+                    </span>
+                    <span className="text-xs tabular-nums" style={{ ...TYPE, color: `${INK}b3` }}>
+                      {c.hasData && risk
+                        ? `${risk.districts.length} locations · top ${Math.max(...risk.districts.map((d) => d.risk_score))}/100`
+                        : "No data yet"}
+                    </span>
+                  </button>
+                ))}
+              </>
+            )}
+          </aside>
         </div>
-      )}
-    </main>
-    </div>
-  );
-}
 
-function RiskMap2D({
-  districts,
-  selected,
-  onSelect,
-}: {
-  districts: DistrictRisk[];
-  selected?: string;
-  onSelect: (d: DistrictRisk) => void;
-}) {
-  const { project } = useMemo(() => {
-    const lats = districts.map((d) => d.lat);
-    const lngs = districts.map((d) => d.lng);
-    const [minLat, maxLat] = [Math.min(...lats), Math.max(...lats)];
-    const [minLng, maxLng] = [Math.min(...lngs), Math.max(...lngs)];
-    const pad = 60;
-    return {
-      project: (d: DistrictRisk) => ({
-        x: pad + ((d.lng - minLng) / (maxLng - minLng || 1)) * (640 - 2 * pad),
-        y: pad + ((maxLat - d.lat) / (maxLat - minLat || 1)) * (400 - 2 * pad),
-      }),
-    };
-  }, [districts]);
-
-  return (
-    <svg viewBox="0 0 640 400" className="w-full" role="img" aria-label="District risk map">
-      {districts.map((d) => {
-        const { x, y } = project(d);
-        const r = 10 + d.detections_7d / 6;
-        const isSel = d.district === selected;
-        return (
-          <g key={d.district} onClick={() => onSelect(d)} className="cursor-pointer">
-            <circle
-              cx={x}
-              cy={y}
-              r={r}
-              fill={`hsl(${40 - d.risk_score * 0.4} 90% 50%)`}
-              fillOpacity={0.55}
-              stroke={isSel ? "currentColor" : "none"}
-              strokeWidth={2}
-            />
-            <text x={x} y={y + r + 14} textAnchor="middle" fontSize={12} fill="currentColor">
-              {d.district}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function ForecastBars({ forecast }: { forecast: ForecastResponse }) {
-  const max = Math.max(...forecast.weeks.map((w) => w.high));
-  return (
-    <div className="mt-4 flex h-48 items-end gap-4">
-      {forecast.weeks.map((w) => (
-        <div key={w.week_ahead} className="flex flex-1 flex-col items-center gap-1">
-          <div className="relative w-full" style={{ height: `${(w.high / max) * 100}%` }}>
-            <div
-              className="absolute inset-x-0 bottom-0 rounded-t bg-amber-500/25"
-              style={{ height: "100%" }}
-            />
-            <div
-              className="absolute inset-x-0 bottom-0 rounded-t bg-amber-500"
-              style={{ height: `${(w.mid / w.high) * 100}%` }}
-            />
+        {selected && (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="rounded-sm border p-4" style={{ borderColor: `${INK}33` }}>
+              <h2 className="text-2xl tracking-wide uppercase" style={DISPLAY}>
+                <span style={{ color: ORANGE }}>{forecastFor ? forecastFor.district : selected.district}</span>:{" "}
+                {DISEASE_LABEL[forecastFor ? forecastFor.disease : selected.main_disease]} cases, next 4 weeks
+              </h2>
+              {forecastFor ? (
+                <div className={`transition-opacity ${forecastStale ? "opacity-40" : ""}`}>
+                  <ForecastChart forecast={forecastFor} />
+                </div>
+              ) : (
+                <p className="opacity-60" style={TYPE}>
+                  Loading forecast…
+                </p>
+              )}
+            </section>
+            <section className="rounded-sm border p-4" style={{ borderColor: `${INK}33` }}>
+              <h2 className="text-2xl tracking-wide uppercase" style={DISPLAY}>
+                Recommended <span style={{ color: RED }}>actions</span>
+              </h2>
+              <p
+                className={`mt-2 whitespace-pre-line text-sm leading-relaxed transition-opacity ${planStale ? "opacity-40" : ""}`}
+                style={TYPE}
+              >
+                {planFor?.text || "Generating…"}
+              </p>
+            </section>
           </div>
-          <span className="text-xs tabular-nums">{w.mid.toLocaleString()}</span>
-          <span className="text-xs opacity-60">wk {w.week_ahead}</span>
-        </div>
-      ))}
+        )}
+      </main>
     </div>
   );
 }

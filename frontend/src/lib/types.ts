@@ -2,7 +2,7 @@
 // The Data/ML service and these Next.js routes must return exactly these shapes.
 // See frontend/API_CONTRACT.md for the human-readable version.
 
-export type Country = "BR" | "NG";
+export type Country = "BR" | "NG" | "US";
 export type Language = "en" | "pt" | "es" | "fr" | "zh" | "yue" | "yo" | "ha";
 export type Genus = "anopheles" | "aedes" | "culex" | "other";
 export type Disease =

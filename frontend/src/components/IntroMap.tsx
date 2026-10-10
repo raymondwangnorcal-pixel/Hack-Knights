@@ -16,7 +16,10 @@ import {
 //  - "killed": the whole map turns into a deaths-per-million map (bands, like WHO's), the region
 //    under the cursor is outlined in full colour and labelled with its band and the fact behind it.
 
-const BAND_OPACITY = [0.14, 0.38, 0.65, 0.95];
+// Death map: a ramp of reds, dark maroon (fewest deaths) to bright scarlet (most).
+const DEATH_SHADES = ["#3A1215", "#6E1A21", "#A8232D", "#DB343E", "#FF5C61"]; // burden levels 0–4
+const BAND_REDS = ["#3A1215", "#7A1C23", "#C42A33", "#FF4D55"]; // DEATH_BANDS 0–3
+const DEATH_HIGHLIGHT = "#FFC2C4";
 
 // Infected map: every region keeps its own shade of orange, so the sections read at a glance.
 // Three tiers (pale, bright, deep) assigned so no two neighbouring regions share a tier.
@@ -33,6 +36,38 @@ const REGION_ORANGE: Record<RegionKey, string> = {
   o: "#FFE6CC", // Oceania              pale
 };
 const HIGHLIGHT = "#FFE066";
+
+// Blend each region's colour softly into its neighbours: every land dot takes a weighted mix of
+// the region colours within a few dots of it, so borders read as gradients instead of hard edges.
+const BLEND_RADIUS = 3; // dots
+const BLEND_SIGMA = 1.6;
+const hex = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+const BLENDED_DOTS: { fill: string; d: string }[] = (() => {
+  const rgb = Object.fromEntries(Object.entries(REGION_ORANGE).map(([k, c]) => [k, hex(c)]));
+  const groups = new Map<string, string>();
+  for (let r = 0; r < MAP_ROWS; r++) {
+    for (let c = 0; c < MAP_COLS; c++) {
+      if (REGION_GRID.charAt(r * MAP_COLS + c) === ".") continue;
+      let wr = 0, wg = 0, wb = 0, wt = 0;
+      for (let dr = -BLEND_RADIUS; dr <= BLEND_RADIUS; dr++) {
+        for (let dc = -BLEND_RADIUS; dc <= BLEND_RADIUS; dc++) {
+          const rr = r + dr, cc = c + dc;
+          if (rr < 0 || rr >= MAP_ROWS || cc < 0 || cc >= MAP_COLS) continue;
+          const k = REGION_GRID.charAt(rr * MAP_COLS + cc);
+          if (k === ".") continue;
+          const w = Math.exp(-(dr * dr + dc * dc) / (2 * BLEND_SIGMA * BLEND_SIGMA));
+          const [cr, cg, cb] = rgb[k];
+          wr += cr * w; wg += cg * w; wb += cb * w; wt += w;
+        }
+      }
+      // Quantise to steps of 8 so dots of near-identical colour share one path.
+      const q = (v: number) => Math.min(255, Math.round(v / wt / 8) * 8);
+      const fill = `rgb(${q(wr)},${q(wg)},${q(wb)})`;
+      groups.set(fill, (groups.get(fill) ?? "") + `M${c} ${r}h.7v.7h-.7z`);
+    }
+  }
+  return [...groups].map(([fill, d]) => ({ fill, d }));
+})();
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 
@@ -85,23 +120,21 @@ export function IntroMap({
       onPointerLeave={() => setHover(null)}
     >
       <svg viewBox={`0 0 ${MAP_COLS} ${MAP_ROWS}`} className="block w-full" role="img" aria-label={label}>
-        {/* Infected map: a fixed shade per region; the hovered one switches to the bright highlight */}
-        {mode === "infected" &&
-          (Object.keys(REGION_ORANGE) as RegionKey[]).map((k) => (
-            <path
-              key={k}
-              d={REGION_PATHS[k]}
-              fill={hover?.region === k ? HIGHLIGHT : REGION_ORANGE[k]}
-              fillOpacity={hover?.region === k ? 1 : 0.92}
-              style={{ transition: "fill 200ms, fill-opacity 200ms" }}
-            />
-          ))}
+        {/* Infected map: blended per-region oranges; the hovered region lights up on top */}
+        {mode === "infected" && (
+          <>
+            {BLENDED_DOTS.map((g) => (
+              <path key={g.fill} d={g.d} fill={g.fill} fillOpacity={0.92} />
+            ))}
+            {hover && <path d={REGION_PATHS[hover.region]} fill={HIGHLIGHT} />}
+          </>
+        )}
 
         {/* Death map: burden shading that gives way to the per-region bands while hovering */}
         {mode === "killed" && (
           <g style={{ opacity: choropleth ? 0 : 1, transition: "opacity 250ms" }}>
             {dots.map((d, i) => (
-              <path key={i} d={d} fill={accent} fillOpacity={[0.22, 0.38, 0.56, 0.76, 0.95].at(i)} />
+              <path key={i} d={d} fill={DEATH_SHADES.at(i)} />
             ))}
           </g>
         )}
@@ -112,8 +145,7 @@ export function IntroMap({
               <path
                 key={k}
                 d={REGION_PATHS[k]}
-                fill={hover?.region === k ? "#FF8A8F" : accent}
-                fillOpacity={hover?.region === k ? 1 : BAND_OPACITY.at(DEATH_FACTS[k].band)}
+                fill={hover?.region === k ? DEATH_HIGHLIGHT : BAND_REDS.at(DEATH_FACTS[k].band)}
               />
             ))}
           </g>
@@ -171,7 +203,7 @@ export function IntroMap({
           Deaths / million / yr
           {DEATH_BANDS.map((b, i) => (
             <span key={b} className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5" style={{ background: accent, opacity: BAND_OPACITY.at(i) }} />
+              <span className="inline-block h-2.5 w-2.5" style={{ background: BAND_REDS.at(i) }} />
               {b}
             </span>
           ))}

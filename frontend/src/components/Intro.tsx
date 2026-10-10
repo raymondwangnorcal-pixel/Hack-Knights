@@ -103,7 +103,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
       </header>
 
       {/* Two counters */}
-      <div className="relative z-10 grid flex-1 md:grid-cols-2 md:divide-x md:divide-[#ECE6DA]/20">
+      <div data-glow-zone className="relative z-10 grid flex-1 md:grid-cols-2 md:divide-x md:divide-[#ECE6DA]/20">
         <Panel
           accent={ORANGE}
           word="Infected"

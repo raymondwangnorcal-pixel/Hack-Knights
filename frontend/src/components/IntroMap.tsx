@@ -17,6 +17,21 @@ import {
 //    under the cursor is outlined in full colour and labelled with its band and the fact behind it.
 
 const BAND_OPACITY = [0.14, 0.38, 0.65, 0.95];
+
+// Infected map: every region keeps its own shade of orange, so the sections read at a glance.
+const REGION_ORANGE: Record<RegionKey, string> = {
+  s: "#E8641F", // Sub-Saharan Africa
+  l: "#F08A3E", // Latin America
+  m: "#C2531B", // North Africa & Middle East
+  a: "#F5A05A", // South Asia
+  t: "#D9732A", // Southeast Asia
+  c: "#A94B1A", // East Asia
+  o: "#F2B27E", // Oceania
+  e: "#B8642E", // Europe
+  n: "#DB8E52", // North America
+  r: "#8A421C", // Russia & Central Asia
+};
+const HIGHLIGHT = "#FFD3A8";
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 
@@ -62,18 +77,33 @@ export function IntroMap({
   return (
     <div
       ref={box}
+      data-glow-block
       className="relative mt-4 w-full max-w-[640px] cursor-crosshair touch-none select-none"
       onPointerMove={onMove}
       onPointerDown={onMove}
       onPointerLeave={() => setHover(null)}
     >
       <svg viewBox={`0 0 ${MAP_COLS} ${MAP_ROWS}`} className="block w-full" role="img" aria-label={label}>
-        {/* Base shading; on the death map it gives way to the per-region bands while hovering */}
-        <g style={{ opacity: choropleth ? 0 : 1, transition: "opacity 250ms" }}>
-          {dots.map((d, i) => (
-            <path key={i} d={d} fill={accent} fillOpacity={[0.22, 0.38, 0.56, 0.76, 0.95].at(i)} />
+        {/* Infected map: a fixed shade per region; the hovered one switches to the bright highlight */}
+        {mode === "infected" &&
+          (Object.keys(REGION_ORANGE) as RegionKey[]).map((k) => (
+            <path
+              key={k}
+              d={REGION_PATHS[k]}
+              fill={hover?.region === k ? HIGHLIGHT : REGION_ORANGE[k]}
+              fillOpacity={hover?.region === k ? 1 : 0.8}
+              style={{ transition: "fill 200ms, fill-opacity 200ms" }}
+            />
           ))}
-        </g>
+
+        {/* Death map: burden shading that gives way to the per-region bands while hovering */}
+        {mode === "killed" && (
+          <g style={{ opacity: choropleth ? 0 : 1, transition: "opacity 250ms" }}>
+            {dots.map((d, i) => (
+              <path key={i} d={d} fill={accent} fillOpacity={[0.22, 0.38, 0.56, 0.76, 0.95].at(i)} />
+            ))}
+          </g>
+        )}
 
         {mode === "killed" && (
           <g style={{ opacity: choropleth ? 1 : 0, transition: "opacity 250ms" }}>
@@ -88,9 +118,6 @@ export function IntroMap({
           </g>
         )}
 
-        {mode === "infected" && hover && (
-          <path d={REGION_PATHS[hover.region]} fill="#FFB27F" fillOpacity={1} />
-        )}
       </svg>
 
       {/* Label card, kept inside the map's width */}

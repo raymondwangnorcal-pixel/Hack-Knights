@@ -2,13 +2,18 @@
 
 import { useEffect, useRef } from "react";
 
-// A faint dot grid across the whole intro that lights up around the cursor, like pixels warming
-// under a torch. Dots take the left accent on the left half and the right accent on the right.
+// A faint dot grid that lights up around the cursor, like pixels warming under a torch.
+// It only lives inside elements marked `data-glow-zone` (the area around the maps) and switches
+// off within a margin of anything marked `data-glow-block` (the maps), so it never competes with
+// their own hover. Left half glows in the first colour, right half in the second.
 // Drawn on a canvas behind the content; skipped entirely for people who turn off motion.
 
-const GAP = 14; // px between dots
-const RADIUS = 170; // px of light around the cursor
+const GAP = 12; // px between dots
+const RADIUS = 110; // px of light around the cursor
 const DOT = 2.5; // px dot size
+const BLOCK_MARGIN = 28; // px kept clear around blocked elements
+
+type Rect = { x: number; y: number; w: number; h: number };
 
 export function GlowGrid({ colors }: { colors: [string, string] }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -36,15 +41,29 @@ export function GlowGrid({ colors }: { colors: [string, string] }) {
     const ro = new ResizeObserver(resize);
     ro.observe(host);
 
-    // Pointer target, the eased light position, and an intensity that fades in and out.
+    // Zones and blocks in host coordinates, refreshed on every pointer move.
+    let zones: Rect[] = [];
+    let blocks: Rect[] = [];
+    const measure = () => {
+      const hr = host.getBoundingClientRect();
+      const toRect = (n: Element, m = 0): Rect => {
+        const r = n.getBoundingClientRect();
+        return { x: r.left - hr.left - m, y: r.top - hr.top - m, w: r.width + 2 * m, h: r.height + 2 * m };
+      };
+      zones = [...host.querySelectorAll("[data-glow-zone]")].map((n) => toRect(n));
+      blocks = [...host.querySelectorAll("[data-glow-block]")].map((n) => toRect(n, BLOCK_MARGIN));
+    };
+    const inside = (rs: Rect[], x: number, y: number) =>
+      rs.some((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+
     const target = { x: -9999, y: -9999, on: false };
     const light = { x: -9999, y: -9999, k: 0 };
     let raf = 0;
 
     const draw = () => {
-      light.x += (target.x - light.x) * 0.25;
-      light.y += (target.y - light.y) * 0.25;
-      light.k += ((target.on ? 1 : 0) - light.k) * 0.12;
+      light.x += (target.x - light.x) * 0.3;
+      light.y += (target.y - light.y) * 0.3;
+      light.k += ((target.on ? 1 : 0) - light.k) * 0.15;
       ctx.clearRect(0, 0, w, h);
       if (light.k > 0.01) {
         const x0 = Math.max(0, Math.floor((light.x - RADIUS) / GAP));
@@ -56,16 +75,14 @@ export function GlowGrid({ colors }: { colors: [string, string] }) {
             const px = gx * GAP + GAP / 2;
             const py = gy * GAP + GAP / 2;
             const d = Math.hypot(px - light.x, py - light.y);
-            if (d > RADIUS) continue;
-            const a = (1 - d / RADIUS) ** 2 * 0.9 * light.k;
-            ctx.globalAlpha = a;
+            if (d > RADIUS || !inside(zones, px, py) || inside(blocks, px, py)) continue;
+            ctx.globalAlpha = (1 - d / RADIUS) ** 2 * 0.9 * light.k;
             ctx.fillStyle = px < w / 2 ? colors[0] : colors[1];
             ctx.fillRect(px - DOT / 2, py - DOT / 2, DOT, DOT);
           }
         }
         ctx.globalAlpha = 1;
       }
-      // Keep animating while the light is visible or still settling.
       if (target.on || light.k > 0.01) raf = requestAnimationFrame(draw);
       else raf = 0;
     };
@@ -74,14 +91,18 @@ export function GlowGrid({ colors }: { colors: [string, string] }) {
     };
 
     const onMove = (e: PointerEvent) => {
+      measure();
       const r = host.getBoundingClientRect();
-      target.x = e.clientX - r.left;
-      target.y = e.clientY - r.top;
-      if (!target.on && light.k < 0.02) {
-        light.x = target.x;
-        light.y = target.y;
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+      const on = inside(zones, x, y) && !inside(blocks, x, y);
+      if (on && !target.on && light.k < 0.02) {
+        light.x = x;
+        light.y = y;
       }
-      target.on = true;
+      target.x = x;
+      target.y = y;
+      target.on = on;
       wake();
     };
     const onLeave = () => {

@@ -97,22 +97,31 @@ export function StickyBar({
       {/* Main row */}
       <div
         className="relative flex items-center gap-5 px-6 sm:px-10"
-        style={{ height: `${lerp(64, BAR_SHRUNK, p)}px` }}
+        style={{
+          height: `${lerp(64, BAR_SHRUNK, p)}px`,
+          ["--tag" as string]: String(1 - stats),
+          ["--tagw" as string]: `${Math.round((1 - stats) * 420)}px`,
+        }}
       >
         <span className="leading-none tracking-wide" style={{ ...DISPLAY, fontSize: `${lerp(44, 34, p)}px` }}>
           Mozzy
         </span>
-        <span className="hidden w-px bg-[#ECE6DA]/40 sm:block" style={{ height: `${lerp(30, 24, p)}px` }} />
-        {/* The tagline hands its place to the For you / For prevention toggle as the counters arrive. */}
-        <div className="relative hidden items-center sm:flex">
-          <span
-            className="whitespace-nowrap uppercase tracking-[0.16em]"
-            style={{ ...TYPE, fontSize: `${lerp(15, 12.5, p)}px`, opacity: 1 - stats }}
-            aria-hidden={stats > 0.5}
-          >
-            Detect locally. Prevent globally.
-          </span>
-          <SideToggle side={side} onSide={onSide} reveal={stats} className="absolute top-1/2 left-0 -translate-y-1/2" />
+        <span className="hidden w-px bg-[#ECE6DA]/40 sm:block max-[1439px]:opacity-[var(--tag)]" style={{ height: `${lerp(30, 24, p)}px` }} />
+        {/* The tagline stays on wide screens. Below 1440px there isn't room for it, a centred toggle
+            and both counters, so it fades and collapses as the toggle arrives. */}
+        <span
+          className="hidden overflow-hidden whitespace-nowrap uppercase tracking-[0.16em] sm:block max-[1439px]:max-w-[var(--tagw)] max-[1439px]:opacity-[var(--tag)]"
+          style={{
+            ...TYPE,
+            fontSize: `${lerp(15, 12.5, p)}px`,
+          }}
+        >
+          Detect locally. Prevent globally.
+        </span>
+        {/* Toggle: centred on the screen; from 1024 to 1440px (counters take over half the bar)
+            it centres in the gap between the wordmark and the counters instead. */}
+        <div className="pointer-events-none hidden items-center justify-center sm:absolute sm:inset-0 sm:flex lg:max-[1439px]:static lg:max-[1439px]:flex-1">
+          <SideToggle side={side} onSide={onSide} reveal={stats} />
         </div>
         {/* Phones: the toggle takes the right side once the top tabs are gone */}
         <SideToggle side={side} onSide={onSide} reveal={stats} className="ml-auto sm:hidden" small />
@@ -200,7 +209,7 @@ function SideToggle({
         ...DISPLAY,
         opacity: reveal,
         transform: `scale(${lerp(0.92, 1, reveal)})`,
-        transformOrigin: "left center",
+        transformOrigin: "center",
         visibility: shown ? "visible" : "hidden",
         pointerEvents: reveal > 0.5 ? "auto" : "none",
       }}

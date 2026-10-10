@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { USE_MOCKS, mockForecast } from "@/lib/mockData";
-import { errorResponse, getForecast } from "@/lib/backend";
+import { getForecast } from "@/lib/backend";
+import { realOrSample } from "@/lib/fallback";
 
 // `district` may be a display name ("Alimosho") or a service id ("NG-LA-ALIMOSHO").
 export async function GET(request: NextRequest) {
@@ -16,9 +17,6 @@ export async function GET(request: NextRequest) {
       : Response.json({ error: "Unknown district" }, { status: 404 });
   }
 
-  try {
-    return Response.json(await getForecast(district));
-  } catch (err) {
-    return errorResponse(err);
-  }
+  // Unknown districts still return the backend's error (mockForecast gives null for them).
+  return realOrSample(() => getForecast(district), () => mockForecast(district));
 }

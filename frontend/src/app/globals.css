@@ -130,5 +130,29 @@ body {
   to { opacity: 1; transform: none; }
 }
 
+/* Listening screen: indeterminate "identifying" bar */
+@keyframes identify-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+.identify-bar > span {
+  animation: identify-slide 1.1s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .identify-bar > span { animation: none; width: 100%; opacity: 0.6; }
+}
+
+/* Intro: the down arrow bobs gently */
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+.bob-arrow {
+  animation: bob 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bob-arrow { animation: none; }
+}
+
 
 

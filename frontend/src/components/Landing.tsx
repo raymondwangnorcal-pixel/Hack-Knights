@@ -4,6 +4,8 @@ import { Suspense, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Intro } from "@/components/Intro";
+import { ListenScreen } from "@/components/ListenScreen";
+import { scrollToId } from "@/components/SmoothScroll";
 
 // One full-screen landing page with two sides, switched by a toggle near the top.
 // Starts on "For you" (light). "For prevention" (governments & nonprofits, dark) takes over
@@ -78,13 +80,15 @@ function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => vo
   // The intro picks a side and scrolls down to it.
   const pick = (s: Side) => {
     onChange(s);
-    document.getElementById("start")?.scrollIntoView({ behavior: "smooth" });
+    scrollToId("start");
   };
 
   return (
     <>
-    <Intro onPick={pick} />
-    <main
+    <Intro onPick={pick} side={side} onSide={onChange} />
+    {/* "For you" is the live listening screen, in the intro's poster palette. */}
+    {!dark && <YouSide />}
+    {dark && <main
       id="start"
       className={`flex min-h-screen flex-1 scroll-mt-16 flex-col transition-colors duration-500 ${
         dark ? "bg-black text-white" : "bg-white text-black"
@@ -143,8 +147,24 @@ function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => vo
         Estimates from WHO and ECDC figures for malaria, dengue, yellow fever, Japanese encephalitis and
         chikungunya. Zika, West Nile and lymphatic filariasis excluded, so counts are a floor.
       </footer>
-    </main>
+    </main>}
     </>
+  );
+}
+
+const POSTER_INK = "#ECE6DA";
+const POSTER_BG = "#13110F";
+
+function YouSide() {
+  // The For you / For prevention toggle lives in the pinned header once you've scrolled here.
+  return (
+    <main
+      id="start"
+      className="flex min-h-[calc(100svh-52px)] flex-1 scroll-mt-[86px] flex-col gap-4 px-3 pt-3 pb-3 lg:scroll-mt-[52px] sm:px-3"
+      style={{ backgroundColor: POSTER_BG, color: POSTER_INK }}
+    >
+      <ListenScreen />
+    </main>
   );
 }
 

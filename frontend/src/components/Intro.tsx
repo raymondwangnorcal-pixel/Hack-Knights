@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RollingNumber } from "@/components/RollingNumber";
 import { useYearClock } from "@/lib/useYearClock";
 import { CASES_PER_SECOND, DISEASES, SECONDS_PER_DEATH, SECONDS_PER_YEAR } from "@/lib/burden";
@@ -59,7 +59,15 @@ function useJitteredCount(annual: number): number | null {
   return shown;
 }
 
-export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
+export function Intro({
+  onPick,
+  side,
+  onSide,
+}: {
+  onPick: (side: IntroSide) => void;
+  side: IntroSide;
+  onSide: (side: IntroSide) => void;
+}) {
   const clock = useYearClock(1000);
   const perYear = (annual: number, c: typeof clock) =>
     c === null ? null : Math.floor((c.secs / SECONDS_PER_YEAR) * annual);
@@ -78,6 +86,8 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
       <StickyBar
         trackId="intro-big-number"
         onPick={onPick}
+        side={side}
+        onSide={onSide}
         counters={[
           { value: infected, word: "Infected", color: ORANGE, roll: INFECTED_ROLL },
           { value: perYear(deaths, clock), word: "Dead", color: RED, fraction: deathFraction, roll: DEATH_ROLL },
@@ -114,25 +124,22 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
             </>
           }
         />
+        <Sources />
+        {/* Nudge toward the listening screen: a slow, small bob (still for reduce-motion) */}
+        <button
+          onClick={() => onPick("you")}
+          aria-label="Scroll down to start listening"
+          className="bob-arrow absolute bottom-4 left-1/2 z-20 hidden h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border border-[#ECE6DA]/30 bg-[#13110F] transition-colors hover:border-[#ECE6DA]/80 md:flex"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 4v15M5.5 12.5 12 19l6.5-6.5" />
+          </svg>
+        </button>
       </div>
 
       <Collage />
       </div>
 
-      {/* Way down */}
-      <div className="relative z-10 flex flex-col items-center gap-2 border-t border-[#ECE6DA]/20 px-6 py-4">
-        <button
-          onClick={() => onPick("you")}
-          className="flex items-center gap-2 text-xl tracking-wider hover:underline"
-          style={DISPLAY}
-        >
-          Find out what&apos;s buzzing near you <span aria-hidden="true">↓</span>
-        </button>
-        <span className="text-center text-[10px] uppercase tracking-[0.12em] opacity-55" style={TYPE}>
-          Since Jan 1 (UTC) · WHO and ECDC yearly estimates spread evenly over the year · Zika, West Nile and
-          lymphatic filariasis excluded, so these are a floor · map regions are broad groupings; hover figures from WHO and ECDC, 2024 · death bands are Mozzy estimates
-        </span>
-      </div>
     </section>
   );
 }
@@ -153,7 +160,7 @@ function Panel({
   rate: React.ReactNode;
 }) {
   return (
-    <div className="relative flex flex-col items-center border-b border-[#ECE6DA]/20 px-6 pt-6 pb-4 md:min-h-0 md:border-b-0 sm:px-10">
+    <div className="relative flex flex-col items-center border-b border-[#ECE6DA]/20 px-6 pt-6 pb-4 md:min-h-0 md:border-b-0 sm:px-8">
       <h2 className="text-3xl tracking-wide sm:text-4xl" style={DISPLAY}>
         <span style={{ color: accent }}>{word}</span> since Jan 1
       </h2>
@@ -183,6 +190,60 @@ function Panel({
         />
       </div>
 
+    </div>
+  );
+}
+
+// Where the counters and maps come from. Shown on hover, focus or tap so judges can check.
+const SOURCES =
+  "Since Jan 1 (UTC) · WHO and ECDC yearly estimates spread evenly over the year · Zika, West Nile and lymphatic filariasis excluded, so these are a floor · map regions are broad groupings; hover figures from WHO and ECDC, 2024 · death bands are Mozzy estimates";
+
+function Sources() {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+  return (
+    <div
+      ref={box}
+      className="z-20 max-md:relative max-md:mr-6 max-md:mb-3 max-md:justify-self-end md:absolute md:left-6 md:bottom-3"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        onClick={() => setOpen((o) => !o)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        aria-expanded={open}
+        aria-describedby="intro-sources"
+        className="flex items-center gap-1.5 text-[11px] tracking-[0.14em] uppercase opacity-60 transition-opacity hover:opacity-100"
+        style={TYPE}
+      >
+        <span aria-hidden="true" className="flex h-4 w-4 items-center justify-center rounded-full border border-current text-[10px] normal-case">
+          i
+        </span>
+        Sources
+      </button>
+      <p
+        id="intro-sources"
+        role="tooltip"
+        className={`absolute right-0 bottom-full mb-2 w-[min(420px,calc(100vw-2rem))] md:right-auto md:left-0 border border-[#ECE6DA]/25 bg-[#13110F] p-3 text-[10.5px] leading-relaxed tracking-[0.06em] uppercase shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-opacity ${
+          open ? "opacity-95" : "pointer-events-none opacity-0"
+        }`}
+        style={TYPE}
+      >
+        {SOURCES}
+      </p>
     </div>
   );
 }
@@ -228,7 +289,7 @@ function Collage() {
               {PHOTOS.map((p) => (
                 <figure
                   key={p.src}
-                  className="relative h-[170px] flex-none overflow-hidden md:h-[clamp(170px,26svh,260px)]"
+                  className="relative h-[128px] flex-none overflow-hidden md:h-[clamp(128px,19.5svh,195px)]"
                   style={{ aspectRatio: p.ar }}
                 >
                   <Image
@@ -236,7 +297,7 @@ function Collage() {
                     alt={copy === 0 ? p.alt : ""}
                     fill
                     loading="eager"
-                    sizes="(min-width: 768px) 470px, 320px"
+                    sizes="(min-width: 768px) 360px, 240px"
                     className="object-cover brightness-90 saturate-[0.9] transition duration-500 hover:brightness-100 hover:saturate-100"
                   />
                 </figure>

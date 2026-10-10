@@ -9,8 +9,27 @@ The frontend calls only the Next.js routes below. When `BUZZ_API_URL` is set, `c
 | `GET /api/detections?country=NG&since=ISO` | `GET /detections?...` | | `DetectionsResponse` |
 | `GET /api/forecast?district=Alimosho` | `GET /forecast?district=...` | | `ForecastResponse` |
 | `POST /api/recommend` | (Gemini, called from Next.js) | JSON `RecommendRequest` (with `language`) | `{ text, source }` |
-| `POST /api/voice` | (ElevenLabs, called from Next.js) | JSON `{ text, language }` | `audio/mpeg` |
+| `POST /api/prevention` | (Next.js + weather + detections + Gemini) | JSON `{ country, district, language?, detection? }` | Three household actions with reasons, source links, and general/local status |
+| `GET /api/voice?lang=ha&text=…` | (ElevenLabs, called from Next.js) | query `lang`, `text` (≤ 600 chars) | `audio/mpeg`, cached by the CDN and the phone |
+| `POST /api/voice` | (ElevenLabs, called from Next.js) | JSON `{ text, language }` | `audio/mpeg`, uncached |
 | `GET /api/voice` | (reads env) | | `{ languages: [] }`: languages with a voice configured |
+
+## What the Next.js classify route sends to FastAPI `POST /classify`
+
+Multipart fields, matching `backend/app/main.py`:
+
+| Field | Value |
+| --- | --- |
+| `audio` | the clip, original filename kept (`clip.webm`, `clip.m4a`, `anopheles-gambiae.wav`) |
+| `client_id` | a UUID per clip, made on the phone, so retries are de-duplicated |
+| `recorded_at` | ISO time the recording started, with timezone (`2026-10-10T19:03:22.000Z`) |
+| `country` | `NG` or `BR` |
+| `district_id` | from `src/lib/districtIds.ts`: Lagos → `NG-LA-` + letters-only upper-case name (`NG-LA-OSHODIISOLO`); every São Paulo neighbourhood → `BR-3550308` (São Paulo city) until the lists are aligned |
+| `source` | `phone` |
+| `device` | `web` |
+| `mime` | the clip's MIME type when known |
+
+**Fallbacks.** If the model can't answer (no `BUZZ_API_URL`, any non-2xx, 20 s timeout, unreachable), the route returns the mock result with `is_simulated: true` and `fallback_reason` (e.g. `"Model service returned 422"`); the screen labels it as a demo result. If the site's own route can't be reached, the screen does the same on the phone. `risk`, `detections` and `forecast` also serve mock data whenever FastAPI doesn't answer, so setting `BUZZ_API_URL` for classify never blanks the district list or the dashboard.
 
 ## `POST /classify` response
 
@@ -28,9 +47,15 @@ The frontend calls only the Next.js routes below. When `BUZZ_API_URL` is set, `c
 ```
 
 - `species` is `null` when only the genus clears the threshold.
+- `confidence` may be `null` when `is_mosquito` is false; `top3` items may use `{genus, p}`. The Next.js route normalizes both, and passes `model_version` through (e.g. `pitch-rule-v1`).
+- Next.js adds `fallback_reason` (string) only on demo results.
 - `genus` is one of `anopheles`, `aedes`, `culex`, `other`.
 - `diseases` uses: `malaria`, `dengue`, `zika`, `chikungunya`, `yellow_fever`, `lymphatic_filariasis`, `west_nile`.
-- Audio arrives as WebM/Opus from Chrome or MP4/AAC from Safari; decode with ffmpeg or librosa.
+- Audio arrives as WebM/Opus from Chrome or MP4/AAC from Safari, or WAV from the listening screen's Sample button; decode with ffmpeg or librosa. The upload keeps its original filename and extension.
+
+## `POST /api/recommend` with `format: "steps"`
+
+For `kind: "species_advice"`, `format: "steps"` returns `text` as exactly three short lines (one step per line, no numbering), translated from the `steps` list in `src/lib/species.ts`. The listening screen's Prevention panel uses this; omitting `format` keeps the original 3-sentence paragraph.
 
 ## Demo decisions
 
@@ -55,6 +80,12 @@ The frontend calls only the Next.js routes below. When `BUZZ_API_URL` is set, `c
 | `ha` | Hausa |
 
 Advice text is available in all eight. Speech is per language: the play button appears only for languages with `ELEVENLABS_VOICE_<CODE>` set, so a language stays text-only until its voice has been tested.
+
+## Household prevention panel
+
+`POST /api/prevention` accepts `country` (`NG` or `BR`), one of the listed `district` values, optional `language`, and optional `{ genus, confidence, is_simulated }` from a classification. The server reads rainfall over the prior 72 hours from Open-Meteo and non-simulated detections over the prior seven days from `BUZZ_API_URL`. A recording affects the plan only when it is real and its confidence is at least 0.7. The district lookup still runs when there is a confident recording. A regional signal needs at least three reliable detections and a unique leading genus. These opportunistic detections are labeled as recent district detections, not a population prevalence estimate. If the signal is unavailable, the panel uses the recording alone and says so; seeded demo detections never count. When a real recording and the district's leading detected genus differ, the three-row plan covers both.
+
+The server assembles an approved set of household actions. Gemini chooses three action IDs and may translate nonchemical copy; the first two IDs are mandatory, so a mixed plan retains an action for each genus. The server fixes the action IDs, links, and chemical copy. Genus names appear in a context line above the actions; the short actions and expanded reasons describe breeding sites or biting times without repeating the names. Translations are checked for shape, length, and unintended genus names but have not been clinically reviewed. Genus alone never establishes pesticide susceptibility. The Bti action is conditional on non-removable water and links to the appropriate regulator's product search; it is not a claim that a particular product is registered. Exact product or label recommendations require a separately verified local product catalogue.
 
 ## Districts
 

@@ -25,7 +25,10 @@ export interface ClassifyResponse {
   diseases: Disease[];
   is_simulated: boolean;
   gate_score?: number; // wingbeat tonality; mosquito if >= 0.20
+  /** e.g. "pitch-rule-v1"; set when the real model answered */
   model_version?: string;
+  /** Set when the model couldn't answer and this is the demo result instead, e.g. "Model service returned 422" */
+  fallback_reason?: string;
 }
 
 /** GET /api/risk?country= */
@@ -110,10 +113,41 @@ export interface RecommendRequest {
   district?: string;
   country?: Country;
   language?: Language; // defaults to "en"
+  /** species_advice only: "paragraph" (default) or "steps" = exactly 3 short lines, one per step */
+  format?: "paragraph" | "steps";
 }
 export interface RecommendResponse {
   text: string;
   source: "gemini" | "mock";
+}
+
+/** POST /api/prevention: three household actions for the listening screen. */
+export interface PreventionRequest {
+  country: Country;
+  district: string;
+  language?: Language;
+  detection?: {
+    genus: Genus | null;
+    confidence: number;
+    is_simulated: boolean;
+  };
+}
+
+export interface PreventionAction {
+  id: string;
+  title: string;
+  reason: string;
+  sourceUrl: string;
+  registryUrl?: string;
+  language?: Language;
+}
+
+export interface PreventionResponse {
+  actions: PreventionAction[];
+  source: "gemini" | "rules";
+  basis: "local" | "general";
+  context: string;
+  language: Language;
 }
 
 /** POST /api/voice -> returns audio/mpeg bytes */

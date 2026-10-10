@@ -300,15 +300,23 @@ interface UpClassify {
   model_version: string;
 }
 
-export async function classify(audio: Blob, country: Country, district: string): Promise<ClassifyResponse> {
+/** Ids the phone sends with each clip, so a retried upload is recognised as the same clip. */
+export interface ClipMeta {
+  clientId?: string;
+  recordedAt?: string;
+  device?: string;
+  filename?: string;
+}
+
+export async function classify(audio: Blob, country: Country, district: string, meta: ClipMeta = {}): Promise<ClassifyResponse> {
   const form = new FormData();
-  form.append("audio", audio, "clip");
-  form.append("client_id", crypto.randomUUID());
-  form.append("recorded_at", new Date().toISOString());
+  form.append("audio", audio, meta.filename || "clip");
+  form.append("client_id", meta.clientId || crypto.randomUUID());
+  form.append("recorded_at", meta.recordedAt || new Date().toISOString());
   form.append("country", country);
   form.append("district_id", await resolveDistrictId(district, country));
   form.append("source", "phone");
-  form.append("device", "web");
+  form.append("device", meta.device || "web");
   if (audio.type) form.append("mime", audio.type);
   const r = await upstream<UpClassify>("/classify", { method: "POST", body: form }, 30_000);
   return {

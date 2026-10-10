@@ -20,6 +20,7 @@ export interface WakeGateFrame {
 export class WakeGate {
   private ctx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
+  private source: MediaStreamAudioSourceNode | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   stream: MediaStream | null = null;
   private opts: Required<WakeGateOptions>;
@@ -43,6 +44,7 @@ export class WakeGate {
     });
     this.ctx = new AudioContext();
     const source = this.ctx.createMediaStreamSource(this.stream);
+    this.source = source;
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0;
@@ -79,6 +81,17 @@ export class WakeGate {
     }, intervalMs);
   }
 
+  /** Connect an extra node (e.g. a finer analyser for a spectrogram) to the live mic. */
+  tap(node: AudioNode): AudioContext | null {
+    if (!this.source || !this.ctx) return null;
+    this.source.connect(node);
+    return this.ctx;
+  }
+
+  get context(): AudioContext | null {
+    return this.ctx;
+  }
+
   pause() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
@@ -91,6 +104,7 @@ export class WakeGate {
     this.stream = null;
     this.ctx = null;
     this.analyser = null;
+    this.source = null;
   }
 }
 

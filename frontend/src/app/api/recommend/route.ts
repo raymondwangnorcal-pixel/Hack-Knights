@@ -8,6 +8,15 @@ function buildPrompt(req: RecommendRequest, facts: string[] = []): string {
   const lang = promptName(parseLanguage(req.language));
   if (req.kind === "species_advice") {
     const info = GENUS_INFO[req.genus ?? "other"];
+    if (req.format === "steps") {
+      return [
+        `You are a public health assistant. Reply only in ${lang}.`,
+        `A phone just detected a mosquito: ${req.species ?? info.label} (genus ${info.label}).`,
+        `Translate ONLY these steps, keeping each as a short command of at most 6 words.`,
+        `Reply with exactly ${info.steps.length} lines, one step per line, no numbers, bullets or preamble:`,
+        ...info.steps.map((s) => `- ${s}`),
+      ].join("\n");
+    }
     return [
       `You are a public health assistant. Reply only in ${lang}.`,
       `A phone just detected a mosquito: ${req.species ?? info.label} (genus ${info.label}).`,
@@ -28,7 +37,8 @@ function buildPrompt(req: RecommendRequest, facts: string[] = []): string {
 
 function mockText(req: RecommendRequest): string {
   if (req.kind === "species_advice") {
-    return GENUS_INFO[req.genus ?? "other"].nextSteps.join(" ");
+    const info = GENUS_INFO[req.genus ?? "other"];
+    return req.format === "steps" ? info.steps.join("\n") : info.nextSteps.join(" ");
   }
   return [
     `1. Treat standing water at markets and construction sites in ${req.district} this week.`,

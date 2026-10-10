@@ -1,10 +1,35 @@
 import classifyMock from "@/mocks/classify.json";
 import { parseCountry } from "@/lib/mockData";
-import { classify, errorResponse } from "@/lib/backend";
+import { BackendError, classify, errorResponse } from "@/lib/backend";
 import type { ClassifyResponse, Country } from "@/lib/types";
 
-// Proxies the audio clip to the Data/ML FastAPI service.
-// Falls back to a mock result when BUZZ_API_URL is not set.
+// Sends the clip to the Data/ML FastAPI service through backend.ts (BUZZ_API_URL).
+// The demo must never dead-end on stage, so whenever the model can't answer (not configured,
+// 4xx/5xx, timeout, unreachable) this returns the sample result with `is_simulated: true` and a
+// `fallback_reason` the screen shows as "Demo result". Failures are still logged for Vercel's logs.
+
+function demo(country: Country, reason: string): Response {
+  const table = classifyMock as Partial<Record<Country, ClassifyResponse>>;
+  const mock = table[country] ?? table.NG!; // no US sample clip yet
+  const body: ClassifyResponse = {
+    ...mock,
+    detection_id: `mock-${country}-${Date.now()}`,
+    is_simulated: true,
+    fallback_reason: reason,
+  };
+  return Response.json(body);
+}
+
+function reasonFor(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const code = /returned (\d{3})/.exec(message)?.[1];
+  if (code) return `Model service returned ${code}`;
+  if (err instanceof BackendError && err.status === 504) {
+    return /timeout|aborted/i.test(message) ? "Model service timed out" : "Model service unreachable";
+  }
+  return "Model service error";
+}
+
 export async function POST(request: Request) {
   const form = await request.formData();
   const audio = form.get("audio");
@@ -15,21 +40,23 @@ export async function POST(request: Request) {
     return Response.json({ error: "Missing 'audio' file" }, { status: 400 });
   }
 
-  if (!process.env.BUZZ_API_URL) {
-    const mock = (classifyMock as Record<Country, ClassifyResponse>)[country];
-    return Response.json({
-      ...mock,
-      detection_id: `mock-${country}-${Date.now()}`,
-    });
-  }
+  if (!process.env.BUZZ_API_URL) return demo(country, "No model connected");
 
   if (!district) {
     return Response.json({ error: "Missing 'district'" }, { status: 400 });
   }
 
   try {
-    return Response.json(await classify(audio, country, district));
+    return Response.json(
+      await classify(audio, country, district, {
+        clientId: (form.get("client_id") as string | null) ?? undefined,
+        recordedAt: (form.get("recorded_at") as string | null) ?? undefined,
+        device: (form.get("device") as string | null) ?? undefined,
+        filename: audio instanceof File && audio.name ? audio.name : undefined,
+      }),
+    );
   } catch (err) {
-    return errorResponse(err);
+    errorResponse(err); // logs "[backend] …"
+    return demo(country, reasonFor(err));
   }
 }

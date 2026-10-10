@@ -122,7 +122,7 @@ export default function ListenPage() {
     <div className="theme-light flex min-h-screen flex-1 flex-col">
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
       <header className="flex items-center justify-between">
-        <Link href="/" className="text-sm opacity-60">← Mozzy</Link>
+        <Link href="/?side=you" className="text-sm opacity-60">← Mozzy</Link>
         <Link href="/dashboard" className="text-sm opacity-60">Dashboard →</Link>
       </header>
 

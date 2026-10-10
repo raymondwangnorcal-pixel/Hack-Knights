@@ -1,24 +1,80 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LiveCounter } from "@/components/LiveCounter";
 import { CASES_PER_SECOND, SECONDS_PER_DEATH } from "@/lib/burden";
 
 // One full-screen landing page with two sides, switched by a toggle near the top.
-// Starts on the consumer side (light). The government/nonprofit side (dark) takes over
-// the full width of the screen. Styled after vercel.com: pure white / black, Geist, hairlines.
+// Starts on "For you" (light). "For prevention" (governments & nonprofits, dark) takes over
+// the full width. Styled after vercel.com: pure white / black, Geist, hairlines.
+// The chosen side is remembered in the URL (?side=prevention, shareable) and on the device.
 
-type Side = "consumer" | "gov";
+export type Side = "you" | "prevention";
 
 const SIDES: { id: Side; label: string }[] = [
-  { id: "consumer", label: "Consumers" },
-  { id: "gov", label: "Governments & nonprofits" },
+  { id: "you", label: "For you" },
+  { id: "prevention", label: "For prevention" },
 ];
 
+const STORAGE_KEY = "mozzy-side";
+const listeners = new Set<() => void>();
+
+function readStoredSide(): Side | null {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    return v === "you" || v === "prevention" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    listeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
+function storeSide(side: Side) {
+  try {
+    localStorage.setItem(STORAGE_KEY, side);
+  } catch {
+    // Private mode or blocked storage: the URL still remembers the side.
+  }
+  listeners.forEach((l) => l());
+}
+
 export function Landing() {
-  const [side, setSide] = useState<Side>("consumer");
-  const dark = side === "gov";
+  return (
+    <Suspense fallback={<LandingView side="you" onChange={() => {}} />}>
+      <LandingWithMemory />
+    </Suspense>
+  );
+}
+
+function LandingWithMemory() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const stored = useSyncExternalStore(subscribe, readStoredSide, () => null);
+
+  const fromUrl = params.get("side");
+  const side: Side = fromUrl === "you" || fromUrl === "prevention" ? fromUrl : (stored ?? "you");
+
+  const onChange = (next: Side) => {
+    storeSide(next);
+    router.replace(`${pathname}?side=${next}`, { scroll: false });
+  };
+
+  return <LandingView side={side} onChange={onChange} />;
+}
+
+function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => void }) {
+  const dark = side === "prevention";
 
   return (
     <main
@@ -39,7 +95,7 @@ export function Landing() {
 
         <div
           role="tablist"
-          aria-label="Choose who Mozzy is for"
+          aria-label="Who is Mozzy for?"
           className={`flex rounded-full border p-1 transition-colors duration-500 ${
             dark ? "border-neutral-800 bg-neutral-950" : "border-neutral-200 bg-neutral-50"
           }`}
@@ -51,7 +107,7 @@ export function Landing() {
                 key={s.id}
                 role="tab"
                 aria-selected={active}
-                onClick={() => setSide(s.id)}
+                onClick={() => onChange(s.id)}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-300 ${
                   active
                     ? dark
@@ -77,13 +133,13 @@ export function Landing() {
       >
         <LiveCounter
           accent="amber"
-          ratePerSecond={CASES_PER_SECOND}
+          metric="cases"
           label="Infected by mosquitoes this year"
           sublabel={`≈ ${CASES_PER_SECOND.toFixed(1)} people every second`}
         />
         <LiveCounter
           accent="red"
-          ratePerSecond={1 / SECONDS_PER_DEATH}
+          metric="deaths"
           label="Killed by mosquito-borne disease this year"
           sublabel={`1 person every ${Math.round(SECONDS_PER_DEATH)} seconds`}
         />

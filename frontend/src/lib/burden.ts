@@ -8,7 +8,7 @@
 // Zika, West Nile and lymphatic filariasis are excluded (no reliable annual global count),
 // so these counters are a conservative floor.
 
-const SECONDS_PER_YEAR = 365.25 * 24 * 60 * 60;
+export const SECONDS_PER_YEAR = 365.25 * 24 * 60 * 60;
 
 export const DISEASES = [
   { name: "Malaria", cases: 282_000_000, deaths: 610_000 },

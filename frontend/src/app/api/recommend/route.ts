@@ -1,9 +1,10 @@
 import { parseLanguage, promptName } from "@/lib/languages";
 import { GENUS_INFO } from "@/lib/species";
+import { getForecast, getRisk } from "@/lib/backend";
 import type { RecommendRequest, RecommendResponse } from "@/lib/types";
 
 // Prompts are owned by the Pitch lead; swap the text in buildPrompt() when theirs are ready.
-function buildPrompt(req: RecommendRequest): string {
+function buildPrompt(req: RecommendRequest, facts: string[] = []): string {
   const lang = promptName(parseLanguage(req.language));
   if (req.kind === "species_advice") {
     const info = GENUS_INFO[req.genus ?? "other"];
@@ -27,6 +28,7 @@ function buildPrompt(req: RecommendRequest): string {
   return [
     `You are advising a district health team. Reply only in ${lang}.`,
     `District: ${req.district}, country: ${req.country}.`,
+    ...facts,
     `Write 4 specific, practical prevention actions for the next 2 weeks`,
     `(larviciding, net or repellent distribution, community messaging, clinic readiness).`,
     `Keep each to one sentence. No preamble.`,
@@ -46,6 +48,29 @@ function mockText(req: RecommendRequest): string {
   ].join("\n");
 }
 
+// Current numbers for the district from the Data/ML service, so the plan is grounded in them.
+// Best effort: the plan still generates without them, but the failure is logged.
+async function districtFacts(req: RecommendRequest): Promise<string[]> {
+  if (req.kind !== "district_plan" || !req.district || !req.country || !process.env.BUZZ_API_URL) return [];
+  try {
+    const [risk, forecast] = await Promise.all([getRisk(req.country), getForecast(req.district)]);
+    const d = risk.districts.find((x) => x.district === req.district);
+    const unit = forecast.unit ?? "cases";
+    const sim = forecast.is_simulated ? " (simulated history)" : "";
+    return [
+      ...(d
+        ? [`Risk score ${d.risk_score}/100, rank ${d.rank} of ${risk.districts.length} districts; ` +
+           `${d.detections_7d} mosquito detections in the last 7 days; ${d.cases_14d} ${unit} in the last 14 days.`]
+        : []),
+      `Forecast ${forecast.disease.replace("_", " ")} ${unit} per week${sim}: ` +
+        forecast.weeks.map((w) => `week ${w.week_ahead} ${Math.round(w.mid)} (${Math.round(w.low)}–${Math.round(w.high)})`).join(", ") + ".",
+    ];
+  } catch (err) {
+    console.error("[recommend] could not load district facts", err);
+    return [];
+  }
+}
+
 export async function POST(request: Request) {
   const body = (await request.json()) as RecommendRequest;
   const key = process.env.GEMINI_API_KEY;
@@ -62,7 +87,7 @@ export async function POST(request: Request) {
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({ contents: [{ parts: [{ text: buildPrompt(body) }] }] }),
+        body: JSON.stringify({ contents: [{ parts: [{ text: buildPrompt(body, await districtFacts(body)) }] }] }),
         signal: AbortSignal.timeout(20_000),
       },
     );

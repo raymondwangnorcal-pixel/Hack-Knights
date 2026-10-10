@@ -32,8 +32,13 @@ const COND = { fontFamily: "'Roboto Condensed', var(--font-geist-sans), sans-ser
 const MONO = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 
 const CLIP_SECONDS = 10;
-const CITY: Record<Country, string> = { NG: "Lagos", BR: "São Paulo" };
-const SAMPLE: Record<Country, string> = { NG: "/samples/anopheles-gambiae.wav", BR: "/samples/aedes-aegypti.wav" };
+// The picker offers Lagos and São Paulo; US (New York, from the backend) isn't on this screen yet.
+const CITY: Record<Country, string> = { NG: "Lagos", BR: "São Paulo", US: "New York" };
+const SAMPLE: Record<Country, string> = {
+  NG: "/samples/anopheles-gambiae.wav",
+  BR: "/samples/aedes-aegypti.wav",
+  US: "/samples/aedes-aegypti.wav",
+};
 const PLACE_KEY = "mozzy-place";
 
 type Stage = "idle" | "listening" | "recording" | "sample" | "uploading" | "result" | "error";
@@ -77,7 +82,7 @@ function makeAnalyser(ctx: BaseAudioContext, loud = false): AnalyserNode {
 }
 
 export function ListenScreen() {
-  const [risk, setRisk] = useState<Record<Country, DistrictRisk[]>>({ NG: [], BR: [] });
+  const [risk, setRisk] = useState<Record<Country, DistrictRisk[]>>({ NG: [], BR: [], US: [] });
   const [riskSimulated, setRiskSimulated] = useState(false);
   const [chosen, setChosen] = useState<Place | null>(null);
   const savedRaw = useSyncExternalStore(noSubscribe, readPlaceRaw, () => null);

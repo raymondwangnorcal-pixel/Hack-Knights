@@ -11,6 +11,7 @@ const BRAZIL_LARVICIDES = "https://www.gov.br/saude/pt-br/assuntos/saude-de-a-a-
 const REGISTRY: Record<Country, string> = {
   BR: "https://www.gov.br/anvisa/pt-br/sistemas/consulta-a-registro",
   NG: "https://registration.nafdac.gov.ng/Home/",
+  US: "https://www.epa.gov/insect-repellents/find-repellent-right-you", // US isn't offered by /api/prevention yet
 };
 
 type KnownGenus = Exclude<Genus, "other">;

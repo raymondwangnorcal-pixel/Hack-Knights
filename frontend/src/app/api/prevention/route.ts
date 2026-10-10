@@ -1,4 +1,5 @@
 import { mockRisk } from "@/lib/mockData";
+import { getDetections } from "@/lib/backend";
 import { gatherPreventionContext, householdCandidates, preventionContextLine, type PreventionContext } from "@/lib/prevention";
 import { parseLanguage, promptName } from "@/lib/languages";
 import type { Country, Detection, DetectionsResponse, Genus, PreventionAction, PreventionRequest, PreventionResponse } from "@/lib/types";
@@ -43,14 +44,12 @@ async function recentRain(lat: number, lng: number): Promise<number | null> {
 async function prevalentGenus(country: Country, district: string): Promise<Exclude<Genus, "other"> | null> {
   if (!process.env.BUZZ_API_URL) return null;
   const since = new Date(Date.now() - 7 * 864e5).toISOString();
-  const qs = new URLSearchParams({ country, since });
   try {
-    const res = await fetch(`${process.env.BUZZ_API_URL.replace(/\/$/, "")}/detections?${qs}`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as DetectionsResponse;
+    // Through backend.ts, so detections arrive in the contract shape (district names, genus).
+    const data: DetectionsResponse = await Promise.race([
+      getDetections(country, since),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("detections timed out")), 5000)),
+    ]);
     if (!Array.isArray(data.detections)) return null;
     const counts: Record<Exclude<Genus, "other">, number> = { aedes: 0, anopheles: 0, culex: 0 };
     for (const item of data.detections as Detection[]) {

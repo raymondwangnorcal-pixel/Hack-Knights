@@ -11,7 +11,7 @@ import type {
 export const USE_MOCKS = !process.env.BUZZ_API_URL;
 
 export function parseCountry(value: string | null): Country {
-  return value === "BR" ? "BR" : "NG";
+  return value === "BR" ? "BR" : value === "US" ? "US" : "NG";
 }
 
 export function mockRisk(country: Country): RiskResponse {
@@ -29,11 +29,11 @@ function rng(seed: number) {
 
 export function mockDetections(country: Country, since?: Date): DetectionsResponse {
   const risk = mockRisk(country);
-  const rand = rng(country === "NG" ? 42 : 7);
+  const rand = rng(country === "NG" ? 42 : country === "BR" ? 7 : 99);
   const now = Date.parse(risk.updated_at);
   const days = 28;
-  const genus: Genus = country === "NG" ? "anopheles" : "aedes";
-  const species = country === "NG" ? "Anopheles gambiae" : "Aedes aegypti";
+  const genus: Genus = country === "NG" ? "anopheles" : country === "BR" ? "aedes" : "culex";
+  const species = country === "NG" ? "Anopheles gambiae" : country === "BR" ? "Aedes aegypti" : "Culex pipiens";
   const detections: Detection[] = [];
   let n = 0;
 
@@ -65,7 +65,7 @@ export function mockDetections(country: Country, since?: Date): DetectionsRespon
 }
 
 export function mockForecast(district: string): ForecastResponse | null {
-  for (const country of ["NG", "BR"] as Country[]) {
+  for (const country of ["NG", "BR", "US"] as Country[]) {
     const d = mockRisk(country).districts.find((x) => x.district === district);
     if (!d) continue;
     const weekly = d.cases_14d / 2;

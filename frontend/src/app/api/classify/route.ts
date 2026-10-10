@@ -1,17 +1,16 @@
 import classifyMock from "@/mocks/classify.json";
 import { parseCountry } from "@/lib/mockData";
-import { districtId } from "@/lib/districtIds";
-import type { ClassifyResponse, Country, Disease, Genus } from "@/lib/types";
+import { BackendError, classify, errorResponse } from "@/lib/backend";
+import type { ClassifyResponse, Country } from "@/lib/types";
 
-// Proxies the audio clip to the Data/ML FastAPI service (BUZZ_API_URL).
+// Sends the clip to the Data/ML FastAPI service through backend.ts (BUZZ_API_URL).
 // The demo must never dead-end on stage, so whenever the model can't answer (not configured,
-// 4xx/5xx, timeout, unreachable) this returns the mock result with `is_simulated: true` and a
-// `fallback_reason` the screen shows as "Demo result". Failures are logged for Vercel's logs.
-
-const UPSTREAM_TIMEOUT_MS = 20_000;
+// 4xx/5xx, timeout, unreachable) this returns the sample result with `is_simulated: true` and a
+// `fallback_reason` the screen shows as "Demo result". Failures are still logged for Vercel's logs.
 
 function demo(country: Country, reason: string): Response {
-  const mock = (classifyMock as Record<Country, ClassifyResponse>)[country];
+  const table = classifyMock as Partial<Record<Country, ClassifyResponse>>;
+  const mock = table[country] ?? table.NG!; // no US sample clip yet
   const body: ClassifyResponse = {
     ...mock,
     detection_id: `mock-${country}-${Date.now()}`,
@@ -21,33 +20,14 @@ function demo(country: Country, reason: string): Response {
   return Response.json(body);
 }
 
-/** What the FastAPI service returns (backend/app/main.py). */
-interface UpstreamResult {
-  detection_id: string;
-  is_mosquito: boolean;
-  species: string | null;
-  genus: Genus | null;
-  confidence: number | null;
-  top3?: { species?: string; genus?: string; probability?: number; p?: number }[];
-  diseases?: Disease[];
-  model_version?: string;
-}
-
-function normalize(u: UpstreamResult): ClassifyResponse {
-  return {
-    detection_id: u.detection_id,
-    is_mosquito: u.is_mosquito,
-    species: u.species ?? null,
-    genus: u.genus ?? null,
-    confidence: u.confidence ?? 0,
-    top3: (u.top3 ?? []).map((t) => ({
-      species: t.species ?? t.genus ?? "unknown",
-      probability: t.probability ?? t.p ?? 0,
-    })),
-    diseases: u.diseases ?? [],
-    is_simulated: false,
-    model_version: u.model_version,
-  };
+function reasonFor(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const code = /returned (\d{3})/.exec(message)?.[1];
+  if (code) return `Model service returned ${code}`;
+  if (err instanceof BackendError && err.status === 504) {
+    return /timeout|aborted/i.test(message) ? "Model service timed out" : "Model service unreachable";
+  }
+  return "Model service error";
 }
 
 export async function POST(request: Request) {
@@ -60,40 +40,23 @@ export async function POST(request: Request) {
     return Response.json({ error: "Missing 'audio' file" }, { status: 400 });
   }
 
-  const apiUrl = process.env.BUZZ_API_URL;
-  if (!apiUrl) return demo(country, "No model connected");
+  if (!process.env.BUZZ_API_URL) return demo(country, "No model connected");
 
-  // The phone sends a per-clip id and the time recording started; fill them in if it didn't,
-  // so retries of the same clip are de-duplicated by the backend.
-  const clientId = (form.get("client_id") as string | null) || crypto.randomUUID();
-  const recordedAt = (form.get("recorded_at") as string | null) || new Date().toISOString();
-  const name = audio instanceof File && audio.name ? audio.name : "clip.webm";
-
-  const upstream = new FormData();
-  upstream.append("audio", audio, name);
-  upstream.append("client_id", clientId);
-  upstream.append("recorded_at", recordedAt);
-  upstream.append("country", country);
-  upstream.append("district_id", districtId(country, district));
-  upstream.append("source", "phone");
-  upstream.append("device", (form.get("device") as string | null) || "web");
-  if (audio.type) upstream.append("mime", audio.type);
+  if (!district) {
+    return Response.json({ error: "Missing 'district'" }, { status: 400 });
+  }
 
   try {
-    const res = await fetch(`${apiUrl.replace(/\/$/, "")}/classify`, {
-      method: "POST",
-      body: upstream,
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      console.error(`classify: model service returned ${res.status}`, detail.slice(0, 500));
-      return demo(country, `Model service returned ${res.status}`);
-    }
-    return Response.json(normalize((await res.json()) as UpstreamResult));
+    return Response.json(
+      await classify(audio, country, district, {
+        clientId: (form.get("client_id") as string | null) ?? undefined,
+        recordedAt: (form.get("recorded_at") as string | null) ?? undefined,
+        device: (form.get("device") as string | null) ?? undefined,
+        filename: audio instanceof File && audio.name ? audio.name : undefined,
+      }),
+    );
   } catch (err) {
-    const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
-    console.error("classify: model service unreachable", String(err));
-    return demo(country, timedOut ? "Model service timed out" : "Model service unreachable");
+    errorResponse(err); // logs "[backend] …"
+    return demo(country, reasonFor(err));
   }
 }

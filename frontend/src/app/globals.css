@@ -61,6 +61,70 @@ body {
   .photo-reel-track { animation: none; }
 }
 
+/* Dashboard map: black world, flat gray country, so the red dots are the only colour. */
+.risk-map.leaflet-container {
+  background: #000;
+  border: 1px solid rgba(236, 230, 218, 0.2);
+  border-radius: 2px;
+}
+.risk-map .leaflet-control-attribution {
+  background: rgba(19, 17, 15, 0.75);
+  color: rgba(236, 230, 218, 0.55);
+  font-family: "IBM Plex Mono", var(--font-geist-mono), monospace;
+  font-size: 10px;
+}
+.risk-map .leaflet-control-attribution a {
+  color: rgba(236, 230, 218, 0.75);
+}
+.risk-map .leaflet-bar,
+.risk-map .leaflet-bar a {
+  background: #13110f;
+  color: #ece6da;
+  border-color: rgba(236, 230, 218, 0.25);
+}
+.risk-map .leaflet-bar a:hover {
+  background: #26221e;
+}
+
+.risk-map .city-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: auto;
+  white-space: nowrap;
+  cursor: pointer;
+  color: rgba(236, 230, 218, 0.85);
+  font: 500 14px "IBM Plex Mono", var(--font-geist-mono), monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 0 3px #000, 0 0 6px #000;
+}
+.risk-map .city-label:hover {
+  color: #fff;
+}
+.risk-map .city-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: rgba(236, 230, 218, 0.85);
+}
+.risk-map .city-label--data {
+  color: #f07636;
+}
+.risk-map .city-label--data:hover {
+  color: #ff9a5c;
+}
+.risk-map .city-label--data .city-dot {
+  background: #f07636;
+}
+
 @keyframes fadein {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
@@ -89,3 +153,6 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .bob-arrow { animation: none; }
 }
+
+
+

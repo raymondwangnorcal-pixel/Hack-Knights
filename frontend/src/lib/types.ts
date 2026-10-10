@@ -2,7 +2,7 @@
 // The Data/ML service and these Next.js routes must return exactly these shapes.
 // See frontend/API_CONTRACT.md for the human-readable version.
 
-export type Country = "BR" | "NG";
+export type Country = "BR" | "NG" | "US";
 export type Language = "en" | "pt" | "es" | "fr" | "zh" | "yue" | "yo" | "ha";
 export type Genus = "anopheles" | "aedes" | "culex" | "other";
 export type Disease =
@@ -24,6 +24,7 @@ export interface ClassifyResponse {
   top3: { species: string; probability: number }[];
   diseases: Disease[];
   is_simulated: boolean;
+  gate_score?: number; // wingbeat tonality; mosquito if >= 0.20
   /** e.g. "pitch-rule-v1"; set when the real model answered */
   model_version?: string;
   /** Set when the model couldn't answer and this is the demo result instead, e.g. "Model service returned 422" */
@@ -32,7 +33,8 @@ export interface ClassifyResponse {
 
 /** GET /api/risk?country= */
 export interface DistrictRisk {
-  district: string;
+  district: string; // display name
+  district_id?: string; // service id, e.g. 'NG-LA-IKEJA'
   country: Country;
   lat: number;
   lng: number;
@@ -56,6 +58,7 @@ export interface Detection {
   time: string; // ISO
   country: Country;
   district: string;
+  district_id?: string;
   lat: number;
   lng: number;
   species: string | null;
@@ -72,16 +75,34 @@ export interface DetectionsResponse {
 /** GET /api/forecast?district= */
 export interface ForecastWeek {
   week_ahead: 1 | 2 | 3 | 4;
+  week_start?: string; // ISO date (Sunday)
   low: number;
   mid: number;
   high: number;
 }
 export interface ForecastResponse {
   district: string;
+  district_id?: string;
   country: Country;
   disease: Disease;
   is_simulated: boolean;
+  unit?: string; // 'cases' | 'positive mosquito pools' (West Nile)
   weeks: ForecastWeek[];
+}
+
+/** GET /api/timeline?country=&weeks= (spread-over-time slider) */
+export interface TimelineRow {
+  week: string; // ISO date, Sunday-start
+  district: string;
+  district_id: string;
+  detections: number;
+  cases: number | null;
+  cases_simulated: boolean;
+}
+export interface TimelineResponse {
+  country: Country;
+  weeks: number;
+  rows: TimelineRow[];
 }
 
 /** POST /api/recommend */

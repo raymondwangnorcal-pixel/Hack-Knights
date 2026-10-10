@@ -1,0 +1,32 @@
+{
+  "NG": {
+    "country": "NG",
+    "updated_at": "2026-10-10T09:00:00Z",
+    "is_simulated": true,
+    "districts": [
+      { "district": "Alimosho", "country": "NG", "lat": 6.6103, "lng": 3.2964, "risk_score": 88, "rank": 1, "detections_7d": 142, "cases_14d": 2310, "weather_factor": 0.82, "main_disease": "malaria" },
+      { "district": "Ikorodu", "country": "NG", "lat": 6.6194, "lng": 3.5105, "risk_score": 81, "rank": 2, "detections_7d": 118, "cases_14d": 1980, "weather_factor": 0.79, "main_disease": "malaria" },
+      { "district": "Kosofe", "country": "NG", "lat": 6.5733, "lng": 3.3986, "risk_score": 74, "rank": 3, "detections_7d": 97, "cases_14d": 1540, "weather_factor": 0.75, "main_disease": "malaria" },
+      { "district": "Mushin", "country": "NG", "lat": 6.5273, "lng": 3.3414, "risk_score": 69, "rank": 4, "detections_7d": 84, "cases_14d": 1320, "weather_factor": 0.71, "main_disease": "malaria" },
+      { "district": "Oshodi-Isolo", "country": "NG", "lat": 6.5355, "lng": 3.3087, "risk_score": 63, "rank": 5, "detections_7d": 71, "cases_14d": 1105, "weather_factor": 0.7, "main_disease": "malaria" },
+      { "district": "Surulere", "country": "NG", "lat": 6.5005, "lng": 3.3581, "risk_score": 55, "rank": 6, "detections_7d": 58, "cases_14d": 890, "weather_factor": 0.66, "main_disease": "malaria" },
+      { "district": "Ikeja", "country": "NG", "lat": 6.6018, "lng": 3.3515, "risk_score": 47, "rank": 7, "detections_7d": 44, "cases_14d": 720, "weather_factor": 0.62, "main_disease": "malaria" },
+      { "district": "Eti-Osa", "country": "NG", "lat": 6.4589, "lng": 3.6015, "risk_score": 38, "rank": 8, "detections_7d": 31, "cases_14d": 510, "weather_factor": 0.6, "main_disease": "malaria" }
+    ]
+  },
+  "BR": {
+    "country": "BR",
+    "updated_at": "2026-10-10T09:00:00Z",
+    "is_simulated": true,
+    "districts": [
+      { "district": "Itaquera", "country": "BR", "lat": -23.5362, "lng": -46.4555, "risk_score": 86, "rank": 1, "detections_7d": 131, "cases_14d": 1840, "weather_factor": 0.84, "main_disease": "dengue" },
+      { "district": "Campo Limpo", "country": "BR", "lat": -23.6489, "lng": -46.7598, "risk_score": 79, "rank": 2, "detections_7d": 112, "cases_14d": 1620, "weather_factor": 0.8, "main_disease": "dengue" },
+      { "district": "Penha", "country": "BR", "lat": -23.5236, "lng": -46.5427, "risk_score": 72, "rank": 3, "detections_7d": 96, "cases_14d": 1390, "weather_factor": 0.77, "main_disease": "dengue" },
+      { "district": "Santo Amaro", "country": "BR", "lat": -23.6544, "lng": -46.7096, "risk_score": 64, "rank": 4, "detections_7d": 80, "cases_14d": 1150, "weather_factor": 0.72, "main_disease": "dengue" },
+      { "district": "Mooca", "country": "BR", "lat": -23.5609, "lng": -46.5995, "risk_score": 57, "rank": 5, "detections_7d": 66, "cases_14d": 940, "weather_factor": 0.69, "main_disease": "dengue" },
+      { "district": "Butantã", "country": "BR", "lat": -23.5713, "lng": -46.7083, "risk_score": 49, "rank": 6, "detections_7d": 52, "cases_14d": 760, "weather_factor": 0.65, "main_disease": "dengue" },
+      { "district": "Sé", "country": "BR", "lat": -23.5505, "lng": -46.6333, "risk_score": 41, "rank": 7, "detections_7d": 39, "cases_14d": 590, "weather_factor": 0.63, "main_disease": "dengue" },
+      { "district": "Pinheiros", "country": "BR", "lat": -23.5614, "lng": -46.7016, "risk_score": 33, "rank": 8, "detections_7d": 27, "cases_14d": 420, "weather_factor": 0.6, "main_disease": "dengue" }
+    ]
+  }
+}

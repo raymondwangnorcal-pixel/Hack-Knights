@@ -1,0 +1,30 @@
+{
+  "NG": {
+    "detection_id": "mock-ng-0001",
+    "is_mosquito": true,
+    "species": "Anopheles gambiae",
+    "genus": "anopheles",
+    "confidence": 0.81,
+    "top3": [
+      { "species": "Anopheles gambiae", "probability": 0.81 },
+      { "species": "Anopheles arabiensis", "probability": 0.12 },
+      { "species": "Culex quinquefasciatus", "probability": 0.04 }
+    ],
+    "diseases": ["malaria"],
+    "is_simulated": true
+  },
+  "BR": {
+    "detection_id": "mock-br-0001",
+    "is_mosquito": true,
+    "species": "Aedes aegypti",
+    "genus": "aedes",
+    "confidence": 0.77,
+    "top3": [
+      { "species": "Aedes aegypti", "probability": 0.77 },
+      { "species": "Aedes albopictus", "probability": 0.15 },
+      { "species": "Culex quinquefasciatus", "probability": 0.05 }
+    ],
+    "diseases": ["dengue", "zika", "chikungunya", "yellow_fever"],
+    "is_simulated": true
+  }
+}

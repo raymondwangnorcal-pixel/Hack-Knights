@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DISEASE_LABEL } from "@/lib/species";
+import RiskHeatMap from "@/components/RiskHeatMap";
 import type { Country, DistrictRisk, ForecastResponse, RiskResponse } from "@/lib/types";
 
 // v0 dashboard: ranked districts, a 2D risk map, forecast and Gemini plan.
@@ -43,8 +44,8 @@ export default function DashboardPage() {
   const forecast = forecastFor?.district === selected?.district ? forecastFor : null;
   const plan = planFor && planFor.district === selected?.district ? planFor.text : "";
 
-  const city = country === "NG" ? "Lagos" : "São Paulo";
-  const disease = country === "NG" ? "malaria" : "dengue";
+  const city = country === "NG" ? "Lagos" : country === "BR" ? "São Paulo" : "New York";
+  const disease = country === "NG" ? "malaria" : country === "BR" ? "dengue" : "west_nile";
 
   return (
     <div className="theme-dark flex min-h-screen flex-1 flex-col">
@@ -60,7 +61,7 @@ export default function DashboardPage() {
           )}
         </div>
         <div className="flex rounded-full border p-1">
-          {(["NG", "BR"] as Country[]).map((c) => (
+          {(["NG", "BR", "US"] as Country[]).map((c) => (
             <button
               key={c}
               onClick={() => setCountry(c)}
@@ -68,7 +69,7 @@ export default function DashboardPage() {
                 country === c ? "bg-foreground text-background" : ""
               }`}
             >
-              {c === "NG" ? "Nigeria" : "Brazil"}
+              {c === "NG" ? "Nigeria" : c === "BR" ? "Brazil" : "USA"}
             </button>
           ))}
         </div>
@@ -77,7 +78,7 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <section className="rounded-2xl border p-4">
           {risk && (
-            <RiskMap2D
+            <RiskHeatMap
               districts={risk.districts}
               selected={selected?.district}
               onSelect={setSelected}
@@ -127,56 +128,6 @@ export default function DashboardPage() {
       )}
     </main>
     </div>
-  );
-}
-
-function RiskMap2D({
-  districts,
-  selected,
-  onSelect,
-}: {
-  districts: DistrictRisk[];
-  selected?: string;
-  onSelect: (d: DistrictRisk) => void;
-}) {
-  const { project } = useMemo(() => {
-    const lats = districts.map((d) => d.lat);
-    const lngs = districts.map((d) => d.lng);
-    const [minLat, maxLat] = [Math.min(...lats), Math.max(...lats)];
-    const [minLng, maxLng] = [Math.min(...lngs), Math.max(...lngs)];
-    const pad = 60;
-    return {
-      project: (d: DistrictRisk) => ({
-        x: pad + ((d.lng - minLng) / (maxLng - minLng || 1)) * (640 - 2 * pad),
-        y: pad + ((maxLat - d.lat) / (maxLat - minLat || 1)) * (400 - 2 * pad),
-      }),
-    };
-  }, [districts]);
-
-  return (
-    <svg viewBox="0 0 640 400" className="w-full" role="img" aria-label="District risk map">
-      {districts.map((d) => {
-        const { x, y } = project(d);
-        const r = 10 + d.detections_7d / 6;
-        const isSel = d.district === selected;
-        return (
-          <g key={d.district} onClick={() => onSelect(d)} className="cursor-pointer">
-            <circle
-              cx={x}
-              cy={y}
-              r={r}
-              fill={`hsl(${40 - d.risk_score * 0.4} 90% 50%)`}
-              fillOpacity={0.55}
-              stroke={isSel ? "currentColor" : "none"}
-              strokeWidth={2}
-            />
-            <text x={x} y={y + r + 14} textAnchor="middle" fontSize={12} fill="currentColor">
-              {d.district}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
   );
 }
 

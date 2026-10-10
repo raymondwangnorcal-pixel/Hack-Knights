@@ -31,6 +31,11 @@ CREATE TABLE IF NOT EXISTS RAW.GUIDANCE_DOCS (     -- WHO / national prevention 
   disease   STRING, country STRING, body STRING NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS RAW.CASES_SIMULATED (    -- SIMULATED cases (Lagos malaria), see scripts/simulate_lagos_malaria.py
+  district_id STRING NOT NULL, week_start DATE NOT NULL, disease STRING NOT NULL,
+  cases NUMBER NOT NULL, generator STRING NOT NULL
+);
+
 -- One row per district per week, the shape SNOWFLAKE.ML.FORECAST wants
 CREATE OR REPLACE VIEW ANALYTICS.WEEKLY_CASES AS
 SELECT district_id, week_start, disease, MAX(cases) AS cases

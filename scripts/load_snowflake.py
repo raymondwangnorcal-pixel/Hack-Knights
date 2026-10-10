@@ -1,6 +1,7 @@
 """Load public history into Snowflake RAW tables, over the REST API only.
 
     .venv/bin/python scripts/load_snowflake.py
+    .venv/bin/python scripts/load_snowflake.py --weather-only US-     # add weather for new districts only
 
 - RAW.CASES_INFODENGUE: weekly dengue cases for the 10 Greater Sao Paulo municipalities, 2020 to now (InfoDengue).
 - RAW.WEATHER_DAILY: daily rain and mean temperature at each of the 30 district centroids (Open-Meteo archive).
@@ -93,8 +94,27 @@ def weather(districts):
     return rows
 
 
+def weather_only(prefix: str):
+    """Add weather for districts whose id starts with prefix (e.g. 'US-') without reloading everything else."""
+    districts = [d for d in json.load(open(ROOT / "data/districts.json")) if d["district_id"].startswith(prefix)]
+    if not districts:
+        sys.exit(f"no districts start with {prefix!r}")
+    wx = weather(districts)
+    sf.execute("DELETE FROM RAW.WEATHER_DAILY WHERE STARTSWITH(district_id, ?)",
+               bindings={"1": {"type": "TEXT", "value": prefix}})
+    insert_json("RAW.WEATHER_DAILY", {"district_id": "STRING", "day": "DATE", "rain_mm": "FLOAT",
+                                      "temp_mean_c": "FLOAT"}, wx)
+    got = int(sf.execute("SELECT COUNT(*) FROM RAW.WEATHER_DAILY WHERE STARTSWITH(district_id, ?)",
+                         bindings={"1": {"type": "TEXT", "value": prefix}})[0][0])
+    print(f"  RAW.WEATHER_DAILY rows for {prefix}*: {got}")
+    if got != len(wx):
+        sys.exit(f"sent {len(wx)} rows but Snowflake has {got}")
+
+
 def main():
     load_env()
+    if len(sys.argv) == 3 and sys.argv[1] == "--weather-only":
+        return weather_only(sys.argv[2])
     districts = json.load(open(ROOT / "data/districts.json"))
     print("fetching InfoDengue...")
     cases = infodengue(districts)

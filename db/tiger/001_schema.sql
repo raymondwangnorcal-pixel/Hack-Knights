@@ -6,8 +6,8 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 CREATE TABLE districts (
   district_id  text PRIMARY KEY,             -- 'BR-3550308', 'NG-LA-IKEJA'
-  country      text NOT NULL CHECK (country IN ('BR','NG')),
-  city         text NOT NULL,                -- 'Sao Paulo' | 'Lagos'
+  country      text NOT NULL CHECK (country IN ('BR','NG','US')),
+  city         text NOT NULL,                -- 'Sao Paulo' | 'Lagos' | 'New York'
   name         text NOT NULL,
   centroid_lat double precision NOT NULL,
   centroid_lon double precision NOT NULL,

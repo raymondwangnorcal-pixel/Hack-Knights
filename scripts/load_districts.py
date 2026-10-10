@@ -2,6 +2,7 @@
 
 Brazil: 10 Greater Sao Paulo municipalities (IBGE codes verified against InfoDengue).
 Nigeria: the 20 Lagos State LGAs.
+United States: the 5 New York City boroughs (geoBoundaries USA ADM2 = counties).
 
 Usage (on the hotspot, Tiger needs a clean network):
     .venv/bin/python scripts/load_districts.py --dry-run    # print only, write nothing
@@ -35,6 +36,11 @@ LAGOS = {
     "lagosmainland", "mushin", "ojo", "oshodiisolo", "somolu", "shomolu", "surulere",
 }
 LAGOS_BBOX = (6.35, 6.72, 2.68, 4.40)    # keeps Lagos's Surulere, drops Oyo's
+
+# County name in geoBoundaries -> borough. Kings and Richmond also exist in other states: the box picks NYC's.
+NYC_BOROUGHS = {"Bronx": "Bronx", "Kings": "Brooklyn", "New York": "Manhattan", "Queens": "Queens",
+                "Richmond": "Staten Island"}
+NYC_BBOX = (40.45, 40.95, -74.30, -73.65)
 
 
 def norm(s: str) -> str:
@@ -116,6 +122,18 @@ def lagos_rows():
     return rows, problems
 
 
+def nyc_rows():
+    feats = load_features("USA")
+    rows, problems = [], []
+    for county, borough in NYC_BOROUGHS.items():
+        hits = [f for f in feats if f["properties"]["shapeName"] == county and in_box(*centroid(f["geometry"]), NYC_BBOX)]
+        if len(hits) != 1:
+            problems.append(f"{borough}: expected 1 match for county {county!r} in NYC, found {len(hits)}")
+            continue
+        rows.append(row("US-NY-" + norm(borough).upper(), "US", "New York", borough, hits[0], None))
+    return rows, problems
+
+
 def load_env():
     """Read PG* vars from .env. Deliberately ignores TIMESCALE_SERVICE_URL (stale password)."""
     for line in (ROOT / ".env").read_text().splitlines():
@@ -128,10 +146,11 @@ def main():
     dry = "--dry-run" in sys.argv
     br, p1 = brazil_rows()
     ng, p2 = lagos_rows()
-    problems = p1 + p2
-    for r in br + ng:
+    us, p3 = nyc_rows()
+    problems = p1 + p2 + p3
+    for r in br + ng + us:
         print(f"{r['district_id']:<26} {r['name']:<24} lat {r['lat']:8.4f} lon {r['lon']:9.4f} pop {r['population']}")
-    print(f"\n{len(br)} Brazil + {len(ng)} Nigeria districts")
+    print(f"\n{len(br)} Brazil + {len(ng)} Nigeria + {len(us)} New York districts")
     if problems:
         print("\nPROBLEMS:", *problems, sep="\n  - ")
         sys.exit(1)
@@ -141,7 +160,7 @@ def main():
     load_env()
     with psycopg.connect(connect_timeout=15) as conn:
         with conn.cursor() as cur:
-            for r in br + ng:
+            for r in br + ng + us:
                 cur.execute(
                     """INSERT INTO districts (district_id, country, city, name, centroid_lat, centroid_lon, population, geojson)
                        VALUES (%(district_id)s, %(country)s, %(city)s, %(name)s, %(lat)s, %(lon)s, %(population)s, %(g)s)

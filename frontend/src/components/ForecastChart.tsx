@@ -6,7 +6,7 @@ import type { ForecastResponse } from "@/lib/types";
 const W = 480;
 const H = 220;
 const PAD = { top: 16, right: 20, bottom: 32, left: 48 };
-const LINE = "#f59e0b";
+const LINE = "#F07636";
 
 export default function ForecastChart({ forecast }: { forecast: ForecastResponse }) {
   const [hover, setHover] = useState<number | null>(null);

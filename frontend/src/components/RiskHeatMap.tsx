@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { City, MapFocus } from "@/lib/cities";
 import type { Detection, DistrictRisk } from "@/lib/types";
 
 const RiskHeatMapClient = dynamic(() => import("./RiskHeatMapClient"), {
@@ -13,6 +14,8 @@ interface RiskHeatMapProps {
   detections: Detection[];
   selected?: string;
   onSelect: (d: DistrictRisk) => void;
+  onCitySelect: (c: City) => void;
+  focus?: MapFocus | null;
 }
 
 export default function RiskHeatMap(props: RiskHeatMapProps) {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DISEASE_LABEL } from "@/lib/species";
 import RiskHeatMap from "@/components/RiskHeatMap";
 import ForecastChart from "@/components/ForecastChart";
+import { CITIES, CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus } from "@/lib/cities";
 import type {
   Country,
   DetectionsResponse,
@@ -29,6 +30,8 @@ export default function DashboardPage() {
   const [risk, setRisk] = useState<RiskResponse | null>(null);
   const [selected, setSelected] = useState<DistrictRisk | null>(null);
   const [detections, setDetections] = useState<DetectionsResponse | null>(null);
+  const [activeCity, setActiveCity] = useState<City | null>(null);
+  const [focus, setFocus] = useState<MapFocus | null>(null);
   // Keyed by district so stale results never show for a newly selected district.
   const [forecastFor, setForecastFor] = useState<ForecastResponse | null>(null);
   const [planFor, setPlanFor] = useState<{ district: string; text: string } | null>(null);
@@ -68,6 +71,24 @@ export default function DashboardPage() {
 
   const city = country === "NG" ? "Lagos" : country === "BR" ? "São Paulo" : "New York";
   const disease = country === "NG" ? "malaria" : country === "BR" ? "dengue" : "west_nile";
+
+  const selectCity = (c: City) => {
+    setActiveCity(c);
+    setFocus({ key: Date.now(), lat: c.lat, lng: c.lng, zoom: CITY_ZOOM });
+  };
+  const backToCities = () => {
+    setActiveCity(null);
+    setFocus({ key: Date.now(), reset: true });
+  };
+  const selectDistrict = (d: DistrictRisk) => {
+    setSelected(d);
+    setFocus({ key: Date.now(), lat: d.lat, lng: d.lng, zoom: DISTRICT_ZOOM });
+  };
+  const changeCountry = (c: Country) => {
+    setCountry(c);
+    setActiveCity(null);
+    setFocus(null);
+  };
 
   return (
     <div
@@ -110,7 +131,7 @@ export default function DashboardPage() {
                 return (
                   <button
                     key={c}
-                    onClick={() => setCountry(c)}
+                    onClick={() => changeCountry(c)}
                     aria-pressed={active}
                     className="rounded-sm border px-4 py-2 text-lg uppercase tracking-widest transition-colors"
                     style={{
@@ -130,39 +151,84 @@ export default function DashboardPage() {
                 districts={risk.districts}
                 detections={detections?.country === risk.country ? detections.detections : []}
                 selected={selected?.district}
-                onSelect={setSelected}
+                onSelect={selectDistrict}
+                onCitySelect={selectCity}
+                focus={focus}
               />
             )}
           </section>
 
           <aside className="flex flex-col gap-2">
-            <h2 className="text-3xl tracking-wide uppercase" style={DISPLAY}>
-              Treat this <span style={{ color: RED }}>week</span>
-            </h2>
-            {risk?.districts.map((d) => {
-              const active = selected?.district === d.district;
-              return (
+            {activeCity ? (
+              <>
                 <button
-                  key={d.district}
-                  onClick={() => setSelected(d)}
-                  className="flex items-center justify-between rounded-sm border px-3 py-2 text-left"
-                  style={{
-                    borderColor: active ? ORANGE : `${INK}33`,
-                    backgroundColor: active ? `${ORANGE}1a` : "transparent",
-                  }}
+                  onClick={backToCities}
+                  className="self-start text-xs uppercase tracking-widest opacity-70 hover:opacity-100"
+                  style={TYPE}
                 >
-                  <span className="text-lg uppercase tracking-wide" style={DISPLAY}>
-                    <span className="mr-2" style={{ color: ORANGE }}>
-                      {d.rank}
-                    </span>
-                    {d.district}
-                  </span>
-                  <span className="text-xs tabular-nums" style={{ ...TYPE, color: `${INK}b3` }}>
-                    {d.risk_score}/100 · {d.detections_7d} buzzes / 7d
-                  </span>
+                  ← All cities
                 </button>
-              );
-            })}
+                <h2 className="text-3xl tracking-wide uppercase" style={DISPLAY}>
+                  <span style={{ color: ORANGE }}>{activeCity.name}</span> · locations
+                </h2>
+                {activeCity.hasData ? (
+                  risk?.districts.map((d) => {
+                    const active = selected?.district === d.district;
+                    return (
+                      <button
+                        key={d.district}
+                        onClick={() => selectDistrict(d)}
+                        className="flex items-center justify-between rounded-sm border px-3 py-2 text-left"
+                        style={{
+                          borderColor: active ? ORANGE : `${INK}33`,
+                          backgroundColor: active ? `${ORANGE}1a` : "transparent",
+                        }}
+                      >
+                        <span className="text-lg uppercase tracking-wide" style={DISPLAY}>
+                          <span className="mr-2" style={{ color: ORANGE }}>
+                            {d.rank}
+                          </span>
+                          {d.district}
+                        </span>
+                        <span className="text-xs tabular-nums" style={{ ...TYPE, color: `${INK}b3` }}>
+                          {d.risk_score}/100 · {d.detections_7d} buzzes / 7d
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm leading-relaxed" style={{ ...TYPE, color: `${INK}99` }}>
+                    No detection data for {activeCity.name} yet.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <h2 className="text-3xl tracking-wide uppercase" style={DISPLAY}>
+                  Pick a <span style={{ color: RED }}>city</span>
+                </h2>
+                {CITIES[country].map((c) => (
+                  <button
+                    key={c.name}
+                    onClick={() => selectCity(c)}
+                    className="flex items-center justify-between rounded-sm border px-3 py-2 text-left"
+                    style={{ borderColor: c.hasData ? `${ORANGE}80` : `${INK}33` }}
+                  >
+                    <span
+                      className="text-lg uppercase tracking-wide"
+                      style={{ ...DISPLAY, color: c.hasData ? ORANGE : INK }}
+                    >
+                      {c.name}
+                    </span>
+                    <span className="text-xs tabular-nums" style={{ ...TYPE, color: `${INK}b3` }}>
+                      {c.hasData && risk
+                        ? `${risk.districts.length} locations · top ${Math.max(...risk.districts.map((d) => d.risk_score))}/100`
+                        : "No data yet"}
+                    </span>
+                  </button>
+                ))}
+              </>
+            )}
           </aside>
         </div>
 

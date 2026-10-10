@@ -121,7 +121,7 @@ export function IntroMap({
     <div
       ref={box}
       data-glow-block
-      className="relative mt-3 w-full max-w-[560px] cursor-crosshair touch-none select-none"
+      className="relative mt-3 w-full max-w-[640px] md:w-[min(100cqw,calc((100cqh-40px)*2.77))] cursor-crosshair touch-none select-none"
       onPointerMove={onMove}
       onPointerDown={onMove}
       onPointerLeave={() => setHover(null)}

@@ -67,17 +67,19 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
   return (
     <section
       aria-label="Mozzy: mosquito-borne disease this year"
-      className="relative flex min-h-[100svh] flex-col"
+      className="relative flex flex-col"
       style={{ backgroundColor: "#13110F", backgroundImage: PAPER, color: INK }}
     >
       <GlowGrid colors={GLOW} />
+      {/* First screen: exactly one window tall on desktop, so the photo strip sits on the bottom edge */}
+      <div className="flex flex-col md:h-[100svh] md:min-h-[640px]">
       {/* Masthead */}
-      <header className="relative z-10 flex flex-wrap items-center justify-between gap-4 border-b border-[#ECE6DA]/20 px-6 py-2 sm:px-10">
+      <header className="relative z-10 flex flex-wrap items-center justify-between gap-4 border-b border-[#ECE6DA]/20 px-6 py-3 sm:px-10">
         <div className="flex items-center gap-5">
-          <span className="text-4xl leading-none tracking-wide sm:text-5xl" style={DISPLAY}>
+          <span className="text-5xl leading-none tracking-wide sm:text-6xl" style={DISPLAY}>
             Mozzy
           </span>
-          <span className="hidden h-8 w-px bg-[#ECE6DA]/40 sm:block" />
+          <span className="hidden h-10 w-px bg-[#ECE6DA]/40 sm:block" />
           <span className="hidden text-xs uppercase leading-relaxed tracking-[0.18em] sm:block" style={TYPE}>
             Hear the mosquito.
             <br />
@@ -93,7 +95,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
           </button>
           <Link
             href="/listen"
-            className="ml-1 rounded-sm px-4 py-1.5 text-lg tracking-wider whitespace-nowrap text-[#13110F] transition-opacity hover:opacity-85"
+            className="ml-1 rounded-sm px-5 py-2.5 text-lg tracking-wider whitespace-nowrap text-[#13110F] transition-opacity hover:opacity-85"
             style={{ backgroundColor: INK }}
           >
             Start listening
@@ -102,7 +104,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
       </header>
 
       {/* Two counters */}
-      <div data-glow-zone className="relative z-10 grid flex-1 md:grid-cols-2 md:divide-x md:divide-[#ECE6DA]/20">
+      <div data-glow-zone className="relative z-10 grid flex-1 md:min-h-0 md:grid-cols-2 md:divide-x md:divide-[#ECE6DA]/20">
         <Panel
           accent={ORANGE}
           word="Infected"
@@ -131,6 +133,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
       </div>
 
       <Collage />
+      </div>
 
       {/* Way down */}
       <div className="relative z-10 flex flex-col items-center gap-2 border-t border-[#ECE6DA]/20 px-6 py-4">
@@ -166,13 +169,13 @@ function Panel({
   rate: React.ReactNode;
 }) {
   return (
-    <div className="relative flex flex-col items-center border-b border-[#ECE6DA]/20 px-6 pt-4 pb-4 md:border-b-0 sm:px-10">
-      <h2 className="text-2xl tracking-wide sm:text-3xl" style={DISPLAY}>
+    <div className="relative flex flex-col items-center border-b border-[#ECE6DA]/20 px-6 pt-6 pb-4 md:min-h-0 md:border-b-0 sm:px-10">
+      <h2 className="text-3xl tracking-wide sm:text-4xl" style={DISPLAY}>
         <span style={{ color: accent }}>{word}</span> since Jan 1
       </h2>
       <RollingNumber
         value={value}
-        className="mt-2 mb-2 text-[clamp(4rem,7vw,7.5rem)]"
+        className="mt-3 mb-2 text-[clamp(4.5rem,8.5vw,9rem)]"
         sepClassName=""
         digitWidth="0.42em"
         cellHeight="0.84em"
@@ -182,15 +185,18 @@ function Panel({
         fraction={fraction}
         style={{ ...DISPLAY, color: accent }}
       />
-      <p className="text-xl uppercase tracking-wider sm:text-2xl" style={DISPLAY}>
+      <p className="text-2xl uppercase tracking-wider sm:text-3xl" style={DISPLAY}>
         {rate}
       </p>
 
-      <IntroMap
-        mode={word === "Died" ? "killed" : "infected"}
-        accent={accent}
-        label={`World map shaded where mosquito-borne disease ${word === "Died" ? "deaths" : "infections"} concentrate; hover a region for details`}
-      />
+      {/* The map takes whatever height is left, sized to fit both ways (a size container) */}
+      <div className="flex w-full flex-1 items-center justify-center md:min-h-0 md:[container-type:size]">
+        <IntroMap
+          mode={word === "Died" ? "killed" : "infected"}
+          accent={accent}
+          label={`World map shaded where mosquito-borne disease ${word === "Died" ? "deaths" : "infections"} concentrate; hover a region for details`}
+        />
+      </div>
 
     </div>
   );
@@ -226,7 +232,7 @@ const PHOTOS: Photo[] = [
 
 function Collage() {
   return (
-    <section aria-label="People affected by mosquito-borne disease" className="relative z-10 border-t border-[#ECE6DA]/20 pb-4">
+    <section aria-label="People affected by mosquito-borne disease" className="relative z-10 border-t border-[#ECE6DA]/20">
       <div
         className="photo-reel overflow-hidden"
         style={{ maskImage: "linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent)" }}
@@ -237,7 +243,7 @@ function Collage() {
               {PHOTOS.map((p) => (
                 <figure
                   key={p.src}
-                  className="relative h-[160px] flex-none overflow-hidden md:h-[200px]"
+                  className="relative h-[170px] flex-none overflow-hidden md:h-[clamp(170px,26svh,260px)]"
                   style={{ aspectRatio: p.ar }}
                 >
                   <Image

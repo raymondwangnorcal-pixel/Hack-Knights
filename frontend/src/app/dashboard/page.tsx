@@ -47,15 +47,16 @@ export default function DashboardPage() {
   const disease = country === "NG" ? "malaria" : "dengue";
 
   return (
+    <div className="theme-dark flex min-h-screen flex-1 flex-col">
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <Link href="/" className="text-sm opacity-60">← Buzz Check</Link>
+          <Link href="/" className="text-sm opacity-60">← Mozzy</Link>
           <h1 className="text-2xl font-semibold">
             {city} · {disease} risk
           </h1>
           {risk?.is_simulated && (
-            <span className="rounded-full bg-black/10 px-2 py-0.5 text-xs">Simulated data</span>
+            <span className="rounded-full bg-current/10 px-2 py-0.5 text-xs">Simulated data</span>
           )}
         </div>
         <div className="flex rounded-full border p-1">
@@ -125,6 +126,7 @@ export default function DashboardPage() {
         </div>
       )}
     </main>
+    </div>
   );
 }
 

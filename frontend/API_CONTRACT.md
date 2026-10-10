@@ -1,4 +1,4 @@
-# Buzz Check API contract
+# Mozzy API contract
 
 The frontend calls only the Next.js routes below. When `BUZZ_API_URL` is set, `classify`, `risk`, `detections` and `forecast` forward to the Data/ML FastAPI service at the same path (without `/api`), so **the FastAPI service must return these exact shapes**. TypeScript definitions: `src/lib/types.ts`. Example payloads: `src/mocks/`.
 

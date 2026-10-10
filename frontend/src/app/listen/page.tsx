@@ -119,9 +119,10 @@ export default function ListenPage() {
   const genusInfo = result ? GENUS_INFO[result.genus ?? "other"] : null;
 
   return (
+    <div className="theme-light flex min-h-screen flex-1 flex-col">
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
       <header className="flex items-center justify-between">
-        <Link href="/" className="text-sm opacity-60">← Buzz Check</Link>
+        <Link href="/" className="text-sm opacity-60">← Mozzy</Link>
         <Link href="/dashboard" className="text-sm opacity-60">Dashboard →</Link>
       </header>
 
@@ -170,7 +171,7 @@ export default function ListenPage() {
       {stage === "listening" && (
         <section className="flex flex-col items-center gap-4">
           <p className="text-lg font-semibold">Listening for a buzz…</p>
-          <div className="h-3 w-full overflow-hidden rounded-full bg-black/10">
+          <div className="h-3 w-full overflow-hidden rounded-full bg-current/10">
             <div
               className="h-full bg-amber-500 transition-[width]"
               style={{ width: `${Math.round((frame?.bandRatio ?? 0) * 100)}%` }}
@@ -199,7 +200,7 @@ export default function ListenPage() {
       {stage === "result" && result && genusInfo && (
         <section className="flex flex-col gap-4 rounded-2xl border p-5">
           {result.is_simulated && (
-            <span className="self-start rounded-full bg-black/10 px-2 py-0.5 text-xs">
+            <span className="self-start rounded-full bg-current/10 px-2 py-0.5 text-xs">
               Simulated result
             </span>
           )}
@@ -212,7 +213,7 @@ export default function ListenPage() {
                 <p className="text-2xl font-semibold">{result.species ?? `${genusInfo.label} (genus)`}</p>
               </div>
               <div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-black/10">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-current/10">
                   <div className="h-full bg-amber-500" style={{ width: `${result.confidence * 100}%` }} />
                 </div>
                 <p className="mt-1 text-xs opacity-60">{Math.round(result.confidence * 100)}% confidence</p>
@@ -243,5 +244,6 @@ export default function ListenPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
     </main>
+    </div>
   );
 }

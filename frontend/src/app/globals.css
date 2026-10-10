@@ -24,3 +24,24 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Mozzy themes, after vercel.com: consumer side light, government/nonprofit side dark. */
+.theme-light {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  background: var(--background);
+  color: var(--foreground);
+}
+.theme-light * {
+  border-color: #eaeaea;
+}
+.theme-dark {
+  --background: #000000;
+  --foreground: #ededed;
+  background: var(--background);
+  color: var(--foreground);
+  color-scheme: dark;
+}
+.theme-dark * {
+  border-color: #262626;
+}

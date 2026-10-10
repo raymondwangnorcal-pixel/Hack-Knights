@@ -1,4 +1,4 @@
-// Shared API contract for Buzz Check.
+// Shared API contract for Mozzy.
 // The Data/ML service and these Next.js routes must return exactly these shapes.
 // See frontend/API_CONTRACT.md for the human-readable version.
 

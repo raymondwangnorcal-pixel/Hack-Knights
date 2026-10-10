@@ -8,8 +8,8 @@ const geistSans = GeistSans;
 const geistMono = GeistMono;
 
 export const metadata: Metadata = {
-  title: "Buzz Check",
-  description: "Shazam for mosquitoes: identify disease-carrying species by their buzz.",
+  title: "Mozzy",
+  description: "Mozzy: Shazam for mosquitoes. Identify disease-carrying species by their buzz.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

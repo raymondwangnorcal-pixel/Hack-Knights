@@ -1,4 +1,4 @@
-# Buzz Check frontend
+# Mozzy frontend
 
 Next.js app for the citizen listening app (`/listen`) and the health dashboard (`/dashboard`).
 

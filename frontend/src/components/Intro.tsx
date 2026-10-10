@@ -10,19 +10,20 @@ import { INFECTED_DOTS, KILLED_DOTS, MAP_COLS, MAP_ROWS } from "@/lib/worldDots"
 
 // Full-screen intro: a printed-poster take on the counters. Two live totals since Jan 1,
 // each over a dot-matrix world map shaded where mosquito-borne disease concentrates.
-// Its own palette (warm paper, ink, orange, deep red), separate from the Vercel-style app below.
+// Its own palette (warm near-black ground, paper-coloured ink, orange, red), separate from the
+// Vercel-style app below.
 
 export type IntroSide = "you" | "prevention";
 
-const INK = "#1C2624";
-const ORANGE = "#D9581E";
-const RED = "#A51D22";
+const INK = "#ECE6DA"; // paper-coloured text on the dark ground
+const ORANGE = "#F07636";
+const RED = "#E0434A";
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 
 // Fine paper grain, drawn by an SVG noise filter.
 const PAPER =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.3 0 0 0 0 0.22 0 0 0 0.09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")";
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.95 0 0 0 0 0.9 0 0 0 0 0.8 0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")";
 
 /**
  * Running total since Jan 1 that jumps by a random 6–14 people each second. Each jump is nudged
@@ -65,15 +66,15 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
     <section
       aria-label="Mozzy: mosquito-borne disease this year"
       className="relative flex min-h-[100svh] flex-col"
-      style={{ backgroundColor: "#EEE9DF", backgroundImage: PAPER, color: INK }}
+      style={{ backgroundColor: "#13110F", backgroundImage: PAPER, color: INK }}
     >
       {/* Masthead */}
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1C2624]/20 px-6 py-4 sm:px-10">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#ECE6DA]/20 px-6 py-4 sm:px-10">
         <div className="flex items-center gap-5">
           <span className="text-5xl leading-none tracking-wide sm:text-6xl" style={DISPLAY}>
             Mozzy
           </span>
-          <span className="hidden h-10 w-px bg-[#1C2624]/40 sm:block" />
+          <span className="hidden h-10 w-px bg-[#ECE6DA]/40 sm:block" />
           <span className="hidden text-xs uppercase leading-relaxed tracking-[0.18em] sm:block" style={TYPE}>
             Hear the mosquito.
             <br />
@@ -89,7 +90,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
           </button>
           <Link
             href="/listen"
-            className="ml-1 rounded-sm px-5 py-2.5 text-lg tracking-wider whitespace-nowrap text-[#EEE9DF] transition-opacity hover:opacity-85"
+            className="ml-1 rounded-sm px-5 py-2.5 text-lg tracking-wider whitespace-nowrap text-[#13110F] transition-opacity hover:opacity-85"
             style={{ backgroundColor: INK }}
           >
             Start listening
@@ -98,7 +99,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
       </header>
 
       {/* Two counters */}
-      <div className="grid flex-1 md:grid-cols-2 md:divide-x md:divide-[#1C2624]/20">
+      <div className="grid flex-1 md:grid-cols-2 md:divide-x md:divide-[#ECE6DA]/20">
         <Panel
           accent={ORANGE}
           word="Infected"
@@ -131,7 +132,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
       <Collage />
 
       {/* Way down */}
-      <div className="flex flex-col items-center gap-2 border-t border-[#1C2624]/20 px-6 py-4">
+      <div className="flex flex-col items-center gap-2 border-t border-[#ECE6DA]/20 px-6 py-4">
         <button
           onClick={() => onPick("you")}
           className="flex items-center gap-2 text-xl tracking-wider hover:underline"
@@ -166,7 +167,7 @@ function Panel({
   dots: string[];
 }) {
   return (
-    <div className="relative flex flex-col items-center border-b border-[#1C2624]/20 px-6 pt-8 pb-6 md:border-b-0 sm:px-10">
+    <div className="relative flex flex-col items-center border-b border-[#ECE6DA]/20 px-6 pt-8 pb-6 md:border-b-0 sm:px-10">
       <h2 className="text-3xl tracking-wide sm:text-4xl" style={DISPLAY}>
         <span style={{ color: accent }}>{word}</span> since Jan 1
       </h2>
@@ -193,7 +194,7 @@ function Panel({
         aria-label={`World map shaded where mosquito-borne disease ${word === "Died" ? "deaths" : "infections"} concentrate`}
       >
         {dots.map((d, i) => (
-          <path key={i} d={d} fill={accent} fillOpacity={[0.13, 0.32, 0.52, 0.74, 0.95].at(i)} />
+          <path key={i} d={d} fill={accent} fillOpacity={[0.22, 0.38, 0.56, 0.76, 0.95].at(i)} />
         ))}
       </svg>
 
@@ -231,7 +232,7 @@ const PHOTOS: Photo[] = [
 
 function Collage() {
   return (
-    <section aria-label="People affected by mosquito-borne disease" className="border-t border-[#1C2624]/20 py-6">
+    <section aria-label="People affected by mosquito-borne disease" className="border-t border-[#ECE6DA]/20 py-6">
       <div
         className="photo-reel overflow-hidden"
         style={{ maskImage: "linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent)" }}
@@ -251,7 +252,7 @@ function Collage() {
                     fill
                     loading="eager"
                     sizes="(min-width: 768px) 470px, 320px"
-                    className="object-cover saturate-[0.9]"
+                    className="object-cover brightness-90 saturate-[0.9] transition duration-500 hover:brightness-100 hover:saturate-100"
                   />
                 </figure>
               ))}

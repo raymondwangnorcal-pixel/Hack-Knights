@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 import { RollingNumber } from "@/components/RollingNumber";
 import { useYearClock } from "@/lib/useYearClock";
 import { CASES_PER_SECOND, DISEASES, SECONDS_PER_DEATH, SECONDS_PER_YEAR } from "@/lib/burden";
-import { INFECTED_DOTS, KILLED_DOTS, MAP_COLS, MAP_ROWS } from "@/lib/worldDots";
+import { INFECTED_DOTS, KILLED_DOTS } from "@/lib/worldDots";
+import { IntroMap } from "@/components/IntroMap";
+import { GlowGrid } from "@/components/GlowGrid";
 
 // Full-screen intro: a printed-poster take on the counters. Two live totals since Jan 1,
 // each over a dot-matrix world map shaded where mosquito-borne disease concentrates.
@@ -18,6 +20,7 @@ export type IntroSide = "you" | "prevention";
 const INK = "#ECE6DA"; // paper-coloured text on the dark ground
 const ORANGE = "#F07636";
 const RED = "#E0434A";
+const GLOW: [string, string] = [ORANGE, RED];
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 
@@ -68,8 +71,9 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
       className="relative flex min-h-[100svh] flex-col"
       style={{ backgroundColor: "#13110F", backgroundImage: PAPER, color: INK }}
     >
+      <GlowGrid colors={GLOW} />
       {/* Masthead */}
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#ECE6DA]/20 px-6 py-4 sm:px-10">
+      <header className="relative z-10 flex flex-wrap items-center justify-between gap-4 border-b border-[#ECE6DA]/20 px-6 py-4 sm:px-10">
         <div className="flex items-center gap-5">
           <span className="text-5xl leading-none tracking-wide sm:text-6xl" style={DISPLAY}>
             Mozzy
@@ -99,7 +103,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
       </header>
 
       {/* Two counters */}
-      <div className="grid flex-1 md:grid-cols-2 md:divide-x md:divide-[#ECE6DA]/20">
+      <div className="relative z-10 grid flex-1 md:grid-cols-2 md:divide-x md:divide-[#ECE6DA]/20">
         <Panel
           accent={ORANGE}
           word="Infected"
@@ -132,7 +136,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
       <Collage />
 
       {/* Way down */}
-      <div className="flex flex-col items-center gap-2 border-t border-[#ECE6DA]/20 px-6 py-4">
+      <div className="relative z-10 flex flex-col items-center gap-2 border-t border-[#ECE6DA]/20 px-6 py-4">
         <button
           onClick={() => onPick("you")}
           className="flex items-center gap-2 text-xl tracking-wider hover:underline"
@@ -142,7 +146,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
         </button>
         <span className="text-center text-[10px] uppercase tracking-[0.12em] opacity-55" style={TYPE}>
           Since Jan 1 (UTC) · WHO and ECDC yearly estimates spread evenly over the year · Zika, West Nile and
-          lymphatic filariasis excluded, so these are a floor · map shading is illustrative
+          lymphatic filariasis excluded, so these are a floor · base map shading is illustrative; hover figures from WHO and ECDC, 2024 · death bands are Mozzy estimates
         </span>
       </div>
     </section>
@@ -187,16 +191,12 @@ function Panel({
         {rate}
       </p>
 
-      <svg
-        viewBox={`0 0 ${MAP_COLS} ${MAP_ROWS}`}
-        className="mt-4 w-full max-w-[640px]"
-        role="img"
-        aria-label={`World map shaded where mosquito-borne disease ${word === "Died" ? "deaths" : "infections"} concentrate`}
-      >
-        {dots.map((d, i) => (
-          <path key={i} d={d} fill={accent} fillOpacity={[0.22, 0.38, 0.56, 0.76, 0.95].at(i)} />
-        ))}
-      </svg>
+      <IntroMap
+        mode={word === "Died" ? "killed" : "infected"}
+        dots={dots}
+        accent={accent}
+        label={`World map shaded where mosquito-borne disease ${word === "Died" ? "deaths" : "infections"} concentrate; hover a region for details`}
+      />
 
     </div>
   );
@@ -232,7 +232,7 @@ const PHOTOS: Photo[] = [
 
 function Collage() {
   return (
-    <section aria-label="People affected by mosquito-borne disease" className="border-t border-[#ECE6DA]/20 py-6">
+    <section aria-label="People affected by mosquito-borne disease" className="relative z-10 border-t border-[#ECE6DA]/20 pb-6">
       <div
         className="photo-reel overflow-hidden"
         style={{ maskImage: "linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent)" }}

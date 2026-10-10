@@ -2,18 +2,18 @@
 
 import { useEffect, useState } from "react";
 
-// Counts up live from Jan 1 of the current year at a fixed per-second rate.
+// Counts up live from Jan 1 (UTC) of the current year at a fixed per-second rate.
 // Computed from elapsed time on every frame, so it never drifts.
 export function LiveCounter({
   ratePerSecond,
   label,
   sublabel,
-  tone,
+  accent,
 }: {
   ratePerSecond: number;
   label: string;
   sublabel: string;
-  tone: "light" | "dark";
+  accent: "amber" | "red";
 }) {
   const [value, setValue] = useState<number | null>(null);
 
@@ -28,19 +28,20 @@ export function LiveCounter({
     return () => cancelAnimationFrame(raf);
   }, [ratePerSecond]);
 
-  const muted = tone === "light" ? "text-neutral-500" : "text-neutral-400";
-  const dot = tone === "light" ? "bg-amber-500" : "bg-red-500";
-
   return (
     <div className="flex flex-col gap-1">
-      <span className={`flex items-center gap-2 font-mono text-xs uppercase tracking-wider ${muted}`}>
-        <span className={`inline-block h-1.5 w-1.5 animate-pulse rounded-full ${dot}`} />
+      <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider opacity-60">
+        <span
+          className={`inline-block h-1.5 w-1.5 animate-pulse rounded-full ${
+            accent === "amber" ? "bg-amber-500" : "bg-red-500"
+          }`}
+        />
         {label}
       </span>
-      <span className="font-mono text-3xl font-semibold tabular-nums tracking-tight sm:text-4xl">
+      <span className="text-3xl font-semibold tabular-nums tracking-tight sm:text-5xl">
         {value === null ? "—" : value.toLocaleString("en-US")}
       </span>
-      <span className={`text-xs ${muted}`}>{sublabel}</span>
+      <span className="text-xs opacity-60">{sublabel}</span>
     </div>
   );
 }

@@ -109,21 +109,23 @@ function Band({
         <span className="text-xs">{meta}</span>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
       <RollingNumber
         value={value}
         className="text-[clamp(2.5rem,8.5vw,4.75rem)] font-bold tracking-tighter lg:text-[clamp(2.5rem,4.6vw,4.75rem)]"
         sepClassName="font-sans -mr-[0.04em]"
       />
 
+      {/* Breakdown sits beside the number and opens as a popover, so the band never grows. */}
       <div className="text-xs uppercase">
-        <details className="group">
+        <details className="group relative">
           <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 border border-current px-2 py-0.5 select-none hover:bg-current/10 [&::-webkit-details-marker]:hidden">
             By disease
             <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true" className="transition-transform group-open:rotate-180">
               <path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" />
             </svg>
           </summary>
-          <ul className="mt-2 flex max-w-xs flex-col gap-1 normal-case">
+          <ul className={`${tone} absolute right-0 top-full z-20 mt-2 flex w-64 flex-col gap-1 border border-current p-3 normal-case shadow-xl max-sm:left-0 max-sm:right-auto`}>
             {breakdown.map((d) => (
               <li key={d.name} className="flex justify-between gap-6">
                 <span className="opacity-75">{d.name}</span>
@@ -132,6 +134,7 @@ function Band({
             ))}
           </ul>
         </details>
+      </div>
       </div>
     </div>
   );

@@ -5,6 +5,12 @@ import type { Country, Detection, DetectionsResponse, Genus, PreventionAction, P
 
 const GENERA: Genus[] = ["aedes", "anopheles", "culex", "other"];
 const geminiCache = new Map<string, { expiresAt: number; actions: PreventionAction[] }>();
+// Gemini's free tier allows only a few requests a day, so its answers are kept in Vercel's shared
+// Data Cache: every visitor and server instance reuses one answer per district, mosquito, rain
+// level and language for GEMINI_REUSE_S. Only successful (200) replies are stored.
+const GEMINI_REUSE_S = 6 * 60 * 60;
+// After a quota error, skip Gemini on this instance for a while instead of asking on every tap.
+let geminiPausedUntil = 0;
 
 async function recentRain(lat: number, lng: number): Promise<number | null> {
   const url = new URL("https://api.open-meteo.com/v1/forecast");
@@ -66,6 +72,7 @@ async function chooseWithGemini(candidates: ReturnType<typeof householdCandidate
   const cacheKey = JSON.stringify({ ...ctx, rainMm: ctx.rainMm === null ? null : Math.round(ctx.rainMm), language });
   const cached = geminiCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.actions;
+  if (geminiPausedUntil > Date.now()) return null;
   const remember = (actions: PreventionAction[]) => {
     if (geminiCache.size >= 128) geminiCache.delete(geminiCache.keys().next().value!);
     geminiCache.set(cacheKey, { expiresAt: Date.now() + 10 * 60_000, actions });
@@ -73,14 +80,16 @@ async function chooseWithGemini(candidates: ReturnType<typeof householdCandidate
   };
   const model = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    // GEMINI_API_BASE exists only so tests can point at a stand-in server.
+    const base = process.env.GEMINI_API_BASE ?? "https://generativelanguage.googleapis.com";
+    const res = await fetch(`${base}/v1beta/models/${model}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
         contents: [{ parts: [{ text: [
           "Choose exactly three action IDs for a household mosquito prevention panel, in priority order.",
           "The first two candidate IDs are mandatory; choose one of the remaining two as the third.",
-          `Context: ${JSON.stringify(ctx)}. The context describes regional signals, not confirmed features of a user's property.`,
+          `Context: ${JSON.stringify({ ...ctx, rainMm: ctx.rainMm === null ? null : Math.round(ctx.rainMm) })}. The context describes regional signals, not confirmed features of a user's property.`,
           `For each selected action, translate its title and reason into ${promptName(language)} without adding facts, products, doses, or instructions.`,
           "Keep Bti wording conditional and retain its registration and label warning. Do not add genus names to action titles or reasons; they appear only in the separate context line. No prose outside JSON.",
           `Candidates: ${JSON.stringify(candidates.map(({ id, title, reason }) => ({ id, title, reason })))}`,
@@ -89,8 +98,11 @@ async function chooseWithGemini(candidates: ReturnType<typeof householdCandidate
         generationConfig: { responseMimeType: "application/json", temperature: 0.1, thinkingConfig: { thinkingLevel: "low" } },
       }),
       signal: AbortSignal.timeout(20000),
+      cache: "force-cache",
+      next: { revalidate: GEMINI_REUSE_S },
     });
     if (!res.ok) {
+      if (res.status === 429) geminiPausedUntil = Date.now() + 10 * 60_000;
       console.error(`prevention: Gemini returned ${res.status}`, (await res.text().catch(() => "")).slice(0, 500));
       return null;
     }

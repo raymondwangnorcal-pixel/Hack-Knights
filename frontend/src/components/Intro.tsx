@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { RollingNumber } from "@/components/RollingNumber";
 import { useYearClock } from "@/lib/useYearClock";
 import { CASES_PER_SECOND, DISEASES, SECONDS_PER_DEATH, SECONDS_PER_YEAR } from "@/lib/burden";
-import { INFECTED_DOTS, KILLED_DOTS } from "@/lib/worldDots";
 import { IntroMap } from "@/components/IntroMap";
 import { GlowGrid } from "@/components/GlowGrid";
 
@@ -114,7 +113,6 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
               <Num color={ORANGE}>+{CASES_PER_SECOND.toFixed(1)}</Num> every second
             </>
           }
-          dots={INFECTED_DOTS}
         />
         <Panel
           accent={RED}
@@ -129,7 +127,6 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
               About <Num color={RED}>1</Num> every <Num color={RED}>{Math.round(SECONDS_PER_DEATH)}</Num> sec
             </>
           }
-          dots={KILLED_DOTS}
         />
       </div>
 
@@ -146,7 +143,7 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
         </button>
         <span className="text-center text-[10px] uppercase tracking-[0.12em] opacity-55" style={TYPE}>
           Since Jan 1 (UTC) · WHO and ECDC yearly estimates spread evenly over the year · Zika, West Nile and
-          lymphatic filariasis excluded, so these are a floor · base map shading is illustrative; hover figures from WHO and ECDC, 2024 · death bands are Mozzy estimates
+          lymphatic filariasis excluded, so these are a floor · map regions are broad groupings; hover figures from WHO and ECDC, 2024 · death bands are Mozzy estimates
         </span>
       </div>
     </section>
@@ -160,7 +157,6 @@ function Panel({
   roll,
   fraction,
   rate,
-  dots,
 }: {
   accent: string;
   word: string;
@@ -168,7 +164,6 @@ function Panel({
   roll: { duration: number; easing: string };
   fraction?: number;
   rate: React.ReactNode;
-  dots: string[];
 }) {
   return (
     <div className="relative flex flex-col items-center border-b border-[#ECE6DA]/20 px-6 pt-8 pb-6 md:border-b-0 sm:px-10">
@@ -193,7 +188,6 @@ function Panel({
 
       <IntroMap
         mode={word === "Died" ? "killed" : "infected"}
-        dots={dots}
         accent={accent}
         label={`World map shaded where mosquito-borne disease ${word === "Died" ? "deaths" : "infections"} concentrate; hover a region for details`}
       />

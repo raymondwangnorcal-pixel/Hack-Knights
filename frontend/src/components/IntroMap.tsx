@@ -13,11 +13,10 @@ import {
 
 // Dot-matrix world map with two hover behaviours:
 //  - "infected": the region under the cursor lights up and a label names its main disease.
-//  - "killed": the whole map turns into a deaths-per-million map (bands, like WHO's), the region
-//    under the cursor is outlined in full colour and labelled with its band and the fact behind it.
+//  - "killed": a deaths-per-million map (bands, like WHO's) in blended reds; the region under the
+//    cursor lights up and is labelled with its band and the fact behind it.
 
 // Death map: a ramp of reds, dark maroon (fewest deaths) to bright scarlet (most).
-const DEATH_SHADES = ["#3A1215", "#6E1A21", "#A8232D", "#DB343E", "#FF5C61"]; // burden levels 0–4
 const BAND_REDS = ["#3A1215", "#7A1C23", "#C42A33", "#FF4D55"]; // DEATH_BANDS 0–3
 const DEATH_HIGHLIGHT = "#FFC2C4";
 
@@ -37,48 +36,57 @@ const REGION_ORANGE: Record<RegionKey, string> = {
 };
 const HIGHLIGHT = "#FFE066";
 
-// Blend each region's colour softly into its neighbours: every land dot takes a weighted mix of
-// the region colours within a few dots of it, so borders read as gradients instead of hard edges.
-const BLEND_RADIUS = 3; // dots
-const BLEND_SIGMA = 1.6;
+// Blend each region's colour gradually into its neighbours: every land dot takes a Gaussian-
+// weighted mix of the region colours within 8 dots of it, so regions meet in long, gentle gradients.
+const BLEND_RADIUS = 8; // dots
+const BLEND_SIGMA = 4;
 const hex = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
-const BLENDED_DOTS: { fill: string; d: string }[] = (() => {
-  const rgb = Object.fromEntries(Object.entries(REGION_ORANGE).map(([k, c]) => [k, hex(c)]));
+function blendDots(colors: Record<RegionKey, string>): { fill: string; d: string }[] {
+  const rgb = Object.fromEntries(Object.entries(colors).map(([k, c]) => [k, hex(c)]));
+  const weights: number[] = [];
+  for (let dr = -BLEND_RADIUS; dr <= BLEND_RADIUS; dr++)
+    for (let dc = -BLEND_RADIUS; dc <= BLEND_RADIUS; dc++)
+      weights.push(Math.exp(-(dr * dr + dc * dc) / (2 * BLEND_SIGMA * BLEND_SIGMA)));
   const groups = new Map<string, string>();
   for (let r = 0; r < MAP_ROWS; r++) {
     for (let c = 0; c < MAP_COLS; c++) {
       if (REGION_GRID.charAt(r * MAP_COLS + c) === ".") continue;
-      let wr = 0, wg = 0, wb = 0, wt = 0;
+      let wr = 0, wg = 0, wb = 0, wt = 0, i = 0;
       for (let dr = -BLEND_RADIUS; dr <= BLEND_RADIUS; dr++) {
-        for (let dc = -BLEND_RADIUS; dc <= BLEND_RADIUS; dc++) {
+        for (let dc = -BLEND_RADIUS; dc <= BLEND_RADIUS; dc++, i++) {
           const rr = r + dr, cc = c + dc;
           if (rr < 0 || rr >= MAP_ROWS || cc < 0 || cc >= MAP_COLS) continue;
           const k = REGION_GRID.charAt(rr * MAP_COLS + cc);
           if (k === ".") continue;
-          const w = Math.exp(-(dr * dr + dc * dc) / (2 * BLEND_SIGMA * BLEND_SIGMA));
+          const w = weights.at(i) ?? 0;
           const [cr, cg, cb] = rgb[k];
           wr += cr * w; wg += cg * w; wb += cb * w; wt += w;
         }
       }
-      // Quantise to steps of 8 so dots of near-identical colour share one path.
-      const q = (v: number) => Math.min(255, Math.round(v / wt / 8) * 8);
+      // Quantise to steps of 6 so dots of near-identical colour share one path.
+      const q = (v: number) => Math.min(255, Math.round(v / wt / 6) * 6);
       const fill = `rgb(${q(wr)},${q(wg)},${q(wb)})`;
       groups.set(fill, (groups.get(fill) ?? "") + `M${c} ${r}h.7v.7h-.7z`);
     }
   }
   return [...groups].map(([fill, d]) => ({ fill, d }));
-})();
+}
+
+const INFECTED_BLEND = blendDots(REGION_ORANGE);
+const DEATH_BLEND = blendDots(
+  Object.fromEntries(
+    (Object.keys(DEATH_FACTS) as RegionKey[]).map((k) => [k, BAND_REDS[DEATH_FACTS[k].band]]),
+  ) as Record<RegionKey, string>,
+);
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 
 export function IntroMap({
   mode,
-  dots,
   accent,
   label,
 }: {
   mode: "infected" | "killed";
-  dots: string[];
   accent: string;
   label: string;
 }) {
@@ -108,7 +116,6 @@ export function IntroMap({
     setHover(found ? { region: found, x, y, w: r.width, h: r.height } : null);
   }
 
-  const choropleth = mode === "killed" && hover !== null;
 
   return (
     <div
@@ -123,32 +130,21 @@ export function IntroMap({
         {/* Infected map: blended per-region oranges; the hovered region lights up on top */}
         {mode === "infected" && (
           <>
-            {BLENDED_DOTS.map((g) => (
+            {INFECTED_BLEND.map((g) => (
               <path key={g.fill} d={g.d} fill={g.fill} fillOpacity={0.92} />
             ))}
             {hover && <path d={REGION_PATHS[hover.region]} fill={HIGHLIGHT} />}
           </>
         )}
 
-        {/* Death map: burden shading that gives way to the per-region bands while hovering */}
+        {/* Death map: deaths-per-million bands, always on, blended in reds; hover lights one region */}
         {mode === "killed" && (
-          <g style={{ opacity: choropleth ? 0 : 1, transition: "opacity 250ms" }}>
-            {dots.map((d, i) => (
-              <path key={i} d={d} fill={DEATH_SHADES.at(i)} />
+          <>
+            {DEATH_BLEND.map((g) => (
+              <path key={g.fill} d={g.d} fill={g.fill} />
             ))}
-          </g>
-        )}
-
-        {mode === "killed" && (
-          <g style={{ opacity: choropleth ? 1 : 0, transition: "opacity 250ms" }}>
-            {(Object.keys(DEATH_FACTS) as RegionKey[]).map((k) => (
-              <path
-                key={k}
-                d={REGION_PATHS[k]}
-                fill={hover?.region === k ? DEATH_HIGHLIGHT : BAND_REDS.at(DEATH_FACTS[k].band)}
-              />
-            ))}
-          </g>
+            {hover && <path d={REGION_PATHS[hover.region]} fill={DEATH_HIGHLIGHT} />}
+          </>
         )}
 
       </svg>
@@ -198,7 +194,7 @@ export function IntroMap({
       {mode === "killed" && (
         <div
           className="pointer-events-none mt-2 flex items-center justify-end gap-2 text-[10px] uppercase tracking-[0.12em]"
-          style={{ ...TYPE, opacity: choropleth ? 0.85 : 0, transition: "opacity 250ms" }}
+          style={{ ...TYPE, opacity: 0.85 }}
         >
           Deaths / million / yr
           {DEATH_BANDS.map((b, i) => (

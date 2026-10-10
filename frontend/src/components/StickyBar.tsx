@@ -71,8 +71,11 @@ export function StickyBar({
 
   const tabs = 1 - ramp(p, 0, 0.2); // tabs fade out fast…
   const tabsGone = p > 0.02; // …and stay gone until the very top
-  const stats = ramp(p, 0.25, 0.6); // counters grow in
-  const words = ramp(p, 0.85, 1); // "INFECTED / DEAD · since Jan 1st" arrive at the end
+  // The whole counter group (numbers, words and "since Jan 1st") reveals as one motion,
+  // eased so it starts gently and settles as the big counters leave view.
+  const t = ramp(p, 0.2, 1);
+  const stats = t * t * (3 - 2 * t); // smoothstep
+  const words = stats;
 
   return (
     <div

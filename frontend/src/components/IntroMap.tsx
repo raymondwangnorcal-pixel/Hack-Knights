@@ -121,7 +121,7 @@ export function IntroMap({
     <div
       ref={box}
       data-glow-block
-      className="relative mt-4 w-full max-w-[640px] cursor-crosshair touch-none select-none"
+      className="relative mt-3 w-full max-w-[560px] cursor-crosshair touch-none select-none"
       onPointerMove={onMove}
       onPointerDown={onMove}
       onPointerLeave={() => setHover(null)}
@@ -180,7 +180,9 @@ export function IntroMap({
           ) : (
             <>
               <p className="text-2xl leading-tight tracking-wide" style={{ ...DISPLAY, color: accent }}>
-                {DEATH_BANDS[DEATH_FACTS[hover.region].band]} deaths per million
+                {DEATH_FACTS[hover.region].deaths
+                  ? `${DEATH_FACTS[hover.region].deaths} deaths in 2024`
+                  : `${DEATH_BANDS[DEATH_FACTS[hover.region].band]} deaths per million`}
               </p>
               <p className="text-[11px] leading-snug" style={TYPE}>
                 {DEATH_FACTS[hover.region].stat}

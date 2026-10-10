@@ -45,16 +45,18 @@ export const INFECTION_FACTS: Record<RegionKey, { disease: string; stat: string;
 /** Death bands, deaths per million people per year (lightest → darkest). */
 export const DEATH_BANDS = ["Under 1", "1–20", "20–200", "200–500+"] as const;
 
-/** Death map: band index into DEATH_BANDS plus the fact behind it. */
-export const DEATH_FACTS: Record<RegionKey, { band: 0 | 1 | 2 | 3; stat: string }> = {
-  s: { band: 3, stat: "579,000 malaria deaths in 2024, 95% of the world's. 3 in 4 were children under five" },
-  l: { band: 1, stat: "Dengue: Brazil alone lost 6,321 people in 2024, about 30 per million" },
+/** Death map: band index into DEATH_BANDS plus the fact behind it. Where a published 2024 death
+ *  count exists for the region, `deaths` holds it and the label shows it instead of the band. */
+export const DEATH_FACTS: Record<RegionKey, { band: 0 | 1 | 2 | 3; stat: string; deaths?: string }> = {
+  s: { band: 3, deaths: "579,000", stat: "Malaria, 95% of the world's malaria deaths. 3 in 4 were children under five" },
+  // Known counts only: Brazil's dengue deaths plus malaria deaths across the Americas (WHO).
+  l: { band: 1, deaths: "6,825+", stat: "Dengue: 6,321 in Brazil alone. Malaria: 504 across the Americas" },
   m: { band: 1, stat: "Mostly malaria, part of ~30,000 deaths outside Africa" },
   a: { band: 1, stat: "Malaria and dengue" },
   t: { band: 1, stat: "Dengue and malaria" },
   o: { band: 1, stat: "Almost all in Papua New Guinea" },
   c: { band: 0, stat: "Few; Japanese encephalitis is the main risk" },
-  e: { band: 0, stat: "125 West Nile deaths in 2024" },
+  e: { band: 0, deaths: "125", stat: "West Nile virus, locally acquired" },
   n: { band: 0, stat: "Mostly West Nile virus" },
   r: { band: 0, stat: "Almost none" },
 };

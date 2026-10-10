@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { RollingNumber } from "@/components/RollingNumber";
 import { useYearClock } from "@/lib/useYearClock";
@@ -80,22 +81,6 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
             </>
           }
           dots={INFECTED_DOTS}
-          left={
-            <div className="flex flex-col gap-1.5">
-              <span className="border-b border-[#1C2624]/30 pb-1 text-[11px] uppercase tracking-[0.18em]" style={TYPE}>
-                Counted here
-              </span>
-              {DISEASES.map((d) => (
-                <span key={d.name} className="flex items-baseline justify-between gap-4 font-serif text-[15px]">
-                  {d.name}
-                  <span className="text-[11px] tabular-nums opacity-70" style={TYPE}>
-                    {perYear(d.cases, clock)?.toLocaleString("en-US") ?? "—"}
-                  </span>
-                </span>
-              ))}
-            </div>
-          }
-          right={<Note>Mozzy hears which mosquito is in the room.</Note>}
         />
         <Panel
           accent={RED}
@@ -109,10 +94,10 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
             </>
           }
           dots={KILLED_DOTS}
-          left={<Note>Same mosquitoes. Different outcomes.</Note>}
-          right={<Note align="right">Most malaria deaths are children under five.</Note>}
         />
       </div>
+
+      <Collage />
 
       {/* Way down */}
       <div className="flex flex-col items-center gap-2 border-t border-[#1C2624]/20 px-6 py-4">
@@ -139,8 +124,6 @@ function Panel({
   roll,
   rate,
   dots,
-  left,
-  right,
 }: {
   accent: string;
   word: string;
@@ -148,8 +131,6 @@ function Panel({
   roll: { duration: number; easing: string };
   rate: React.ReactNode;
   dots: string[];
-  left: React.ReactNode;
-  right: React.ReactNode;
 }) {
   return (
     <div className="relative flex flex-col items-center border-b border-[#1C2624]/20 px-6 pt-8 pb-6 md:border-b-0 sm:px-10">
@@ -182,11 +163,6 @@ function Panel({
         ))}
       </svg>
 
-      {/* Corner notes: overlaid on wide screens, stacked below the map on small ones */}
-      <div className="mt-4 flex w-full items-end justify-between gap-6 lg:absolute lg:inset-x-10 lg:bottom-6 lg:mt-0 lg:w-auto">
-        <div className="max-w-[220px]">{left}</div>
-        <div className="max-w-[200px]">{right}</div>
-      </div>
     </div>
   );
 }
@@ -199,16 +175,42 @@ function Num({ color, children }: { color: string; children: React.ReactNode }) 
   );
 }
 
-function Note({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
+// The people behind the numbers. Tiles crop each photo with object-position;
+// on desktop a 12-column mosaic two rows tall, on phones a two-column grid.
+const PHOTOS: { src: string; alt: string; tile: string; focus: string }[] = [
+  {
+    src: "/intro/zika-infant.jpg",
+    alt: "An infant with microcephaly held by her mother",
+    tile: "col-span-2 row-span-2 md:col-span-4",
+    focus: "50% 35%",
+  },
+  { src: "/intro/child-oxygen.jpg", alt: "A young child on oxygen in a hospital bed", tile: "md:col-span-4", focus: "20% 25%" },
+  { src: "/intro/jaundice.jpg", alt: "A man with jaundice and bruising in a hospital bed", tile: "md:col-span-4", focus: "15% 30%" },
+  { src: "/intro/red-eyes.jpg", alt: "A boy with bleeding in the whites of both eyes", tile: "md:col-span-2", focus: "50% 30%" },
+  { src: "/intro/rash-torso.jpg", alt: "A rash covering a man's chest and arm", tile: "md:col-span-3", focus: "50% 40%" },
+  { src: "/intro/rash-face.jpg", alt: "A rash across a young woman's face and neck", tile: "col-span-2 md:col-span-3", focus: "35% 25%" },
+];
+
+function Collage() {
   return (
-    <p
-      className={`text-[11px] uppercase leading-relaxed tracking-[0.16em] ${align === "right" ? "text-right" : ""}`}
-      style={TYPE}
-    >
-      <span aria-hidden="true" className="mb-1 block opacity-60">
-        —
-      </span>
-      {children}
-    </p>
+    <section aria-label="People affected by mosquito-borne disease" className="border-t border-[#1C2624]/20 px-6 pt-5 pb-6 sm:px-10">
+      <h3 className="mb-3 text-[11px] uppercase tracking-[0.18em]" style={TYPE}>
+        The people behind the numbers
+      </h3>
+      <div className="grid auto-rows-[120px] grid-cols-2 gap-1.5 md:auto-rows-[132px] md:grid-cols-12">
+        {PHOTOS.map((p) => (
+          <figure key={p.src} className={`relative overflow-hidden bg-[#1C2624]/10 ${p.tile}`}>
+            <Image
+              src={p.src}
+              alt={p.alt}
+              fill
+              sizes="(min-width: 768px) 33vw, 50vw"
+              className="object-cover grayscale-[15%] sepia-[12%] transition duration-500 hover:grayscale-0 hover:sepia-0"
+              style={{ objectPosition: p.focus }}
+            />
+          </figure>
+        ))}
+      </div>
+    </section>
   );
 }

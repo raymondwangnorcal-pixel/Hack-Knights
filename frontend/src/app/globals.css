@@ -46,6 +46,20 @@ body {
   border-color: #262626;
 }
 
+/* Scrolling fact wire under the counter banner. */
+@keyframes marquee {
+  to { transform: translateX(-50%); }
+}
+.marquee {
+  animation: marquee 80s linear infinite;
+}
+.marquee:hover {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee { animation: none; }
+}
+
 @keyframes fadein {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }

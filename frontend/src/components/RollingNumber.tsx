@@ -8,9 +8,12 @@ const DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 export function RollingNumber({
   value,
   className = "",
+  sepClassName = "",
 }: {
   value: number | null;
   className?: string;
+  /** Extra classes for commas, e.g. a narrower width in monospace fonts. */
+  sepClassName?: string;
 }) {
   if (value === null) return <span className={className}>—</span>;
   const text = value.toLocaleString("en-US");
@@ -22,7 +25,7 @@ export function RollingNumber({
         const key = text.length - i;
         if (ch < "0" || ch > "9") {
           return (
-            <span key={`s${key}`} aria-hidden="true" className="inline-block h-[1.15em] leading-[1.15em]">
+            <span key={`s${key}`} aria-hidden="true" className={`inline-block h-[1.15em] leading-[1.15em] ${sepClassName}`}>
               {ch}
             </span>
           );

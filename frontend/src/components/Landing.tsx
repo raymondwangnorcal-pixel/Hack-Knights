@@ -3,8 +3,7 @@
 import { Suspense, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LiveCounter } from "@/components/LiveCounter";
-import { CASES_PER_SECOND, SECONDS_PER_DEATH } from "@/lib/burden";
+import { CounterBanner } from "@/components/CounterBanner";
 
 // One full-screen landing page with two sides, switched by a toggle near the top.
 // Starts on "For you" (light). "For prevention" (governments & nonprofits, dark) takes over
@@ -125,25 +124,8 @@ function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => vo
         </div>
       </header>
 
-      {/* Two live counters, shown on both sides */}
-      <section
-        className={`grid gap-8 border-b px-6 py-8 transition-colors duration-500 sm:grid-cols-2 sm:px-12 ${
-          dark ? "border-neutral-800" : "border-neutral-200"
-        }`}
-      >
-        <LiveCounter
-          accent="amber"
-          metric="cases"
-          label="Infected by mosquitoes this year"
-          sublabel={`≈ ${CASES_PER_SECOND.toFixed(1)} people every second`}
-        />
-        <LiveCounter
-          accent="red"
-          metric="deaths"
-          label="Killed by mosquito-borne disease this year"
-          sublabel={`1 person every ${Math.round(SECONDS_PER_DEATH)} seconds`}
-        />
-      </section>
+      {/* Live counter banner (Climate Clock style), same on both sides */}
+      <CounterBanner />
 
       {/* Side content */}
       <section key={side} className="flex flex-1 flex-col justify-center gap-10 px-6 py-12 sm:px-12 animate-[fadein_400ms_ease-out]">

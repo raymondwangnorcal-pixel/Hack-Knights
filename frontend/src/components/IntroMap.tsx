@@ -19,19 +19,20 @@ import {
 const BAND_OPACITY = [0.14, 0.38, 0.65, 0.95];
 
 // Infected map: every region keeps its own shade of orange, so the sections read at a glance.
+// Three tiers (pale, bright, deep) assigned so no two neighbouring regions share a tier.
 const REGION_ORANGE: Record<RegionKey, string> = {
-  s: "#E8641F", // Sub-Saharan Africa
-  l: "#F08A3E", // Latin America
-  m: "#C2531B", // North Africa & Middle East
-  a: "#F5A05A", // South Asia
-  t: "#D9732A", // Southeast Asia
-  c: "#A94B1A", // East Asia
-  o: "#F2B27E", // Oceania
-  e: "#B8642E", // Europe
-  n: "#DB8E52", // North America
-  r: "#8A421C", // Russia & Central Asia
+  n: "#FFB677", // North America        pale
+  l: "#F26B1D", // Latin America        bright
+  e: "#FFD9B3", // Europe               pale
+  m: "#FF9233", // N Africa & Mid East  bright
+  s: "#B83A0B", // Sub-Saharan Africa   deep
+  a: "#FFC793", // South Asia           pale
+  t: "#9C330C", // Southeast Asia       deep
+  c: "#FFA24D", // East Asia            bright
+  r: "#6E2A0E", // Russia & Central Asia deep
+  o: "#FFE6CC", // Oceania              pale
 };
-const HIGHLIGHT = "#FFD3A8";
+const HIGHLIGHT = "#FFE066";
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 
@@ -91,7 +92,7 @@ export function IntroMap({
               key={k}
               d={REGION_PATHS[k]}
               fill={hover?.region === k ? HIGHLIGHT : REGION_ORANGE[k]}
-              fillOpacity={hover?.region === k ? 1 : 0.8}
+              fillOpacity={hover?.region === k ? 1 : 0.92}
               style={{ transition: "fill 200ms, fill-opacity 200ms" }}
             />
           ))}

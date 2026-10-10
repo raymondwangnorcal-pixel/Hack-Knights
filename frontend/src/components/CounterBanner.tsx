@@ -100,10 +100,10 @@ function Band({
   breakdown: { name: string; value: number | null }[];
 }) {
   return (
-    <div className={`${tone} flex flex-col gap-2 px-6 py-5 sm:px-12 lg:px-10`}>
+    <div className={`${tone} flex flex-col gap-2 px-6 py-5 sm:px-12 lg:gap-1 lg:px-10 lg:py-3`}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 uppercase">
         <span className="flex flex-col">
-          <span className="text-xl font-bold tracking-wide">{title}</span>
+          <span className="text-xl font-bold tracking-wide lg:text-base">{title}</span>
           <span className="text-[11px] leading-tight opacity-75">{caption}</span>
         </span>
         <span className="text-xs">{meta}</span>
@@ -112,7 +112,7 @@ function Band({
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
       <RollingNumber
         value={value}
-        className="text-[clamp(2.5rem,8.5vw,4.75rem)] font-bold tracking-tighter lg:text-[clamp(2.5rem,4.6vw,4.75rem)]"
+        className="text-[clamp(2.5rem,8.5vw,4.75rem)] font-bold tracking-tighter lg:text-[clamp(2rem,3.2vw,3.25rem)]"
         sepClassName="font-sans -mr-[0.04em]"
       />
 

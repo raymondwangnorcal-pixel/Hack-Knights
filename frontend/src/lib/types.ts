@@ -100,6 +100,35 @@ export interface RecommendResponse {
   source: "gemini" | "mock";
 }
 
+/** POST /api/prevention: three household actions for the listening screen. */
+export interface PreventionRequest {
+  country: Country;
+  district: string;
+  language?: Language;
+  detection?: {
+    genus: Genus | null;
+    confidence: number;
+    is_simulated: boolean;
+  };
+}
+
+export interface PreventionAction {
+  id: string;
+  title: string;
+  reason: string;
+  sourceUrl: string;
+  registryUrl?: string;
+  language?: Language;
+}
+
+export interface PreventionResponse {
+  actions: PreventionAction[];
+  source: "gemini" | "rules";
+  basis: "local" | "general";
+  context: string;
+  language: Language;
+}
+
 /** POST /api/voice -> returns audio/mpeg bytes */
 export interface VoiceRequest {
   text: string;

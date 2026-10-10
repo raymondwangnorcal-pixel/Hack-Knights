@@ -9,6 +9,7 @@ The frontend calls only the Next.js routes below. When `BUZZ_API_URL` is set, `c
 | `GET /api/detections?country=NG&since=ISO` | `GET /detections?...` | | `DetectionsResponse` |
 | `GET /api/forecast?district=Alimosho` | `GET /forecast?district=...` | | `ForecastResponse` |
 | `POST /api/recommend` | (Gemini, called from Next.js) | JSON `RecommendRequest` (with `language`) | `{ text, source }` |
+| `POST /api/prevention` | (Next.js + weather + detections + Gemini) | JSON `{ country, district, language?, detection? }` | Three household actions with reasons, source links, and general/local status |
 | `POST /api/voice` | (ElevenLabs, called from Next.js) | JSON `{ text, language }` | `audio/mpeg` |
 | `GET /api/voice` | (reads env) | | `{ languages: [] }`: languages with a voice configured |
 
@@ -78,6 +79,12 @@ For `kind: "species_advice"`, `format: "steps"` returns `text` as exactly three 
 | `ha` | Hausa |
 
 Advice text is available in all eight. Speech is per language: the play button appears only for languages with `ELEVENLABS_VOICE_<CODE>` set, so a language stays text-only until its voice has been tested.
+
+## Household prevention panel
+
+`POST /api/prevention` accepts `country` (`NG` or `BR`), one of the listed `district` values, optional `language`, and optional `{ genus, confidence, is_simulated }` from a classification. The server reads rainfall over the prior 72 hours from Open-Meteo and non-simulated detections over the prior seven days from `BUZZ_API_URL`. A recording affects the plan only when it is real and its confidence is at least 0.7. The district lookup still runs when there is a confident recording. A regional signal needs at least three reliable detections and a unique leading genus. These opportunistic detections are labeled as recent district detections, not a population prevalence estimate. If the signal is unavailable, the panel uses the recording alone and says so; seeded demo detections never count. When a real recording and the district's leading detected genus differ, the three-row plan covers both.
+
+The server assembles an approved set of household actions. Gemini chooses three action IDs and may translate nonchemical copy; the first two IDs are mandatory, so a mixed plan retains an action for each genus. The server fixes the action IDs, links, and chemical copy. Genus names appear in a context line above the actions; the short actions and expanded reasons describe breeding sites or biting times without repeating the names. Translations are checked for shape, length, and unintended genus names but have not been clinically reviewed. Genus alone never establishes pesticide susceptibility. The Bti action is conditional on non-removable water and links to the appropriate regulator's product search; it is not a claim that a particular product is registered. Exact product or label recommendations require a separately verified local product catalogue.
 
 ## Districts
 

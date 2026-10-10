@@ -11,15 +11,15 @@ import type {
   Country,
   DistrictRisk,
   Language,
-  RecommendResponse,
+  PreventionResponse,
   RiskResponse,
   VoiceLanguagesResponse,
 } from "@/lib/types";
 
 // The "For you" screen under the intro: Shazam for mosquitoes, in the intro's poster palette.
 // Left: live spectrogram, the big listen button, and the result row (species, how sure we are,
-// risk in the chosen district, what it can carry). Right: three prevention steps for that
-// mosquito, grounded on the species table and translated by Gemini.
+// risk in the chosen district, what it can carry). Right: three location-aware prevention
+// actions, refined by a reliable mosquito signal and selected by Gemini when configured.
 
 const INK = "#ECE6DA";
 const ORANGE = "#F07636";
@@ -91,8 +91,9 @@ export function ListenScreen() {
   const [error, setError] = useState("");
   const [language, setLanguage] = useState<Language>("en");
   const [voiced, setVoiced] = useState<Language[]>([]);
-  // Keyed by detection + language so stale steps never show after a switch.
-  const [steps, setSteps] = useState<{ key: string; lines: string[]; source: RecommendResponse["source"] } | null>(null);
+  // Keyed by place, detection, and language so stale advice never appears after a switch.
+  const [prevention, setPrevention] = useState<{ key: string; data: PreventionResponse } | null>(null);
+  const [preventionRefresh, setPreventionRefresh] = useState(0);
 
   const gate = useRef<WakeGate | null>(null);
   const sampleCtx = useRef<AudioContext | null>(null);
@@ -306,44 +307,50 @@ export function ListenScreen() {
     replay.current.play().then(() => setReplaying(true)).catch(() => setReplaying(false));
   }
 
-  // Prevention steps for the latest result, in the chosen language.
-  const genus = result ? (result.is_mosquito ? (result.genus ?? "other") : "other") : null;
-  const stepsKey = result ? `${result.detection_id}:${language}` : "";
+  // Update when the location, recording, or local mosquito data changes.
   useEffect(() => {
-    if (!result || !genus) return;
-    const key = `${result.detection_id}:${language}`;
-    const fallback = GENUS_INFO[genus].steps;
-    fetch("/api/recommend", {
+    const timer = setInterval(() => setPreventionRefresh((n) => n + 1), 5 * 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  const preventionKey = `${place.country}:${place.district}:${result?.detection_id ?? "none"}:${language}:${preventionRefresh}`;
+  useEffect(() => {
+    if (!place.district) return;
+    const controller = new AbortController();
+    const key = preventionKey;
+    fetch("/api/prevention", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        kind: "species_advice",
-        format: "steps",
-        species: result.is_mosquito ? result.species : null,
-        genus,
+        country: place.country,
+        district: place.district,
         language,
+        detection: result?.is_mosquito ? {
+          genus: result.genus,
+          confidence: result.confidence,
+          is_simulated: result.is_simulated,
+        } : undefined,
       }),
+      signal: controller.signal,
     })
-      .then((r) => r.json())
-      .then((d: RecommendResponse) => {
-        const lines = (d.text ?? "")
-          .split("\n")
-          .map((l) => l.replace(/^[\s\d.)\-*•–]+/, "").trim())
-          .filter(Boolean)
-          .slice(0, fallback.length);
-        setSteps({ key, lines: lines.length ? lines : fallback, source: lines.length ? d.source : "mock" });
+      .then((r) => {
+        if (!r.ok) throw new Error("Prevention unavailable");
+        return r.json();
       })
-      .catch(() => setSteps({ key, lines: fallback, source: "mock" }));
-  }, [result, genus, language]);
+      .then((data: PreventionResponse) => {
+        if (!controller.signal.aborted && data.actions?.length === 3) setPrevention({ key, data });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [place.country, place.district, result, language, preventionKey]);
 
-  const shownSteps = steps?.key === stepsKey ? steps : null;
+  const shownPrevention = prevention?.key === preventionKey ? prevention.data : null;
 
   async function speak() {
-    if (!shownSteps) return;
+    if (!shownPrevention) return;
     const res = await fetch("/api/voice", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: shownSteps.lines.join(". "), language }),
+      body: JSON.stringify({ text: shownPrevention.actions.filter((a) => !a.language || a.language === language).map((a) => a.title).join(". "), language }),
     });
     if (!res.ok) return;
     new Audio(URL.createObjectURL(await res.blob())).play().catch(() => {});
@@ -521,7 +528,7 @@ export function ListenScreen() {
             {voiced.includes(language) && (
               <button
                 onClick={speak}
-                disabled={!shownSteps}
+                disabled={!shownPrevention}
                 aria-label="Read the steps aloud"
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-[#ECE6DA]/40 hover:border-[#ECE6DA] disabled:opacity-30"
               >
@@ -547,28 +554,45 @@ export function ListenScreen() {
           </div>
         </div>
 
-        <ol className="flex flex-col" lang={shownSteps ? language : "en"}>
-          {(shownSteps?.lines ?? [null, null, null]).map((line, i) => (
-            <li key={i} className="flex items-center gap-6 border-b border-[#ECE6DA]/20 py-6 sm:gap-8 sm:py-8">
+        <p className="border-b border-[#ECE6DA]/20 py-3 text-[14px] leading-snug opacity-70" style={COND} aria-label="Mosquito evidence">
+          {shownPrevention
+            ? `${shownPrevention.context}${shownPrevention.basis === "general" ? " · General guidance" : ""}`
+            : "Checking local mosquito data…"}
+        </p>
+
+        <ol className="flex flex-col" lang={shownPrevention?.language ?? "en"}>
+          {(shownPrevention?.actions ?? [null, null, null]).map((item, i) => (
+            <li key={item?.id ?? i} className="flex items-start gap-6 border-b border-[#ECE6DA]/20 py-6 sm:gap-8 sm:py-8">
               <span
                 className="w-12 flex-none text-[44px] leading-none sm:text-[52px]"
-                style={{ ...DISPLAY, color: ORANGE, opacity: line ? 1 : 0.35 }}
+                style={{ ...DISPLAY, color: ORANGE, opacity: item ? 1 : 0.35 }}
               >
                 {String(i + 1).padStart(2, "0")}
               </span>
               <span className="h-14 w-px flex-none bg-[#ECE6DA]/20" />
-              <span className="text-[22px] leading-tight font-light sm:text-[27px]" style={{ ...COND, opacity: line ? 1 : 0.35 }}>
-                {line ?? (i === 0 ? (result ? "Translating…" : "Listen for a buzz") : "—")}
-              </span>
+              {item ? (
+                <details className="min-w-0 flex-1 group" lang={item.language ?? shownPrevention?.language ?? "en"}>
+                  <summary className="flex cursor-pointer list-none items-start justify-between gap-3 text-[22px] leading-tight font-light sm:text-[27px] [&::-webkit-details-marker]:hidden" style={COND}>
+                    <span>{item.title}</span><span className="mt-1 flex-none text-sm opacity-50 group-open:hidden" aria-hidden="true">＋</span>
+                  </summary>
+                  <p className="mt-3 max-w-prose text-[16px] leading-snug opacity-75" style={COND}>{item.reason}</p>
+                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm underline underline-offset-2" style={COND}>
+                    <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Why this action ↗</a>
+                    {item.registryUrl && <a href={item.registryUrl} target="_blank" rel="noopener noreferrer">Check registration and label ↗</a>}
+                  </div>
+                </details>
+              ) : (
+                <span className="text-[22px] leading-tight font-light opacity-35 sm:text-[27px]" style={COND}>
+                  {i === 0 ? "Preparing local guidance…" : "—"}
+                </span>
+              )}
             </li>
           ))}
         </ol>
         <p className="mt-auto pt-6 text-[15px] opacity-70" style={COND}>
-          {!shownSteps
-            ? "Steps appear for the mosquito you catch."
-            : shownSteps.source === "gemini"
-              ? "By Gemini, from Mozzy's species guidance"
-              : "From Mozzy's species guidance"}
+          {!shownPrevention
+            ? "Preparing advice for your district."
+            : shownPrevention.source === "gemini" ? "By Gemini" : "From Mozzy guidance"}
         </p>
       </section>
     </div>

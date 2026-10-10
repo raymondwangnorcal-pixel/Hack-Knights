@@ -19,6 +19,8 @@ export function RollingNumber({
   digitWidth = "0.62em",
   cellHeight = "1.15em",
   cellLine,
+  fraction,
+  fractionMs = 1000,
   style,
 }: {
   value: number | null;
@@ -34,6 +36,11 @@ export function RollingNumber({
   cellHeight?: string;
   /** Line height inside each window (defaults to cellHeight); lower it to lift a font that sits low. */
   cellLine?: string;
+  /** 0–1 progress toward the next whole number. When set, the last digit creeps continuously
+   *  instead of turning all at once, so the next number arrives at the end of a slow roll. */
+  fraction?: number;
+  /** How often `fraction` updates, in ms; the creep glides linearly over this long. */
+  fractionMs?: number;
   style?: React.CSSProperties;
 }) {
   if (value === null) return <span className={className} style={style}>—</span>;
@@ -51,7 +58,19 @@ export function RollingNumber({
             </span>
           );
         }
-        return <Reel key={`d${key}`} digit={ch.charCodeAt(0) - 48} duration={duration} easing={easing} width={digitWidth} height={cellHeight} line={cellLine ?? cellHeight} />;
+        return (
+          <Reel
+            key={`d${key}`}
+            digit={ch.charCodeAt(0) - 48}
+            duration={duration}
+            easing={easing}
+            width={digitWidth}
+            height={cellHeight}
+            line={cellLine ?? cellHeight}
+            creep={key === 1 ? fraction : undefined}
+            creepMs={fractionMs}
+          />
+        );
       })}
     </span>
   );
@@ -64,6 +83,8 @@ function Reel({
   width,
   height,
   line,
+  creep,
+  creepMs,
 }: {
   digit: number;
   duration: number;
@@ -71,11 +92,21 @@ function Reel({
   width: string;
   height: string;
   line: string;
+  creep?: number;
+  creepMs: number;
 }) {
   // pos is a slot on the 30-long reel; pos % 10 is the digit showing.
   const [pos, setPos] = useState(digit);
   const [animate, setAnimate] = useState(false);
   const [prevDigit, setPrevDigit] = useState(digit);
+  // A creeping reel is always gliding; `snapped` pauses that glide for the one update after it
+  // quietly jumps back a lap, so the jump itself is never animated.
+  const [snapped, setSnapped] = useState(false);
+  const [prevCreep, setPrevCreep] = useState(creep);
+  if (creep !== prevCreep) {
+    setPrevCreep(creep);
+    if (snapped) setSnapped(false);
+  }
 
   // Adjust state while rendering when the digit changes (no effect needed).
   if (digit !== prevDigit) {
@@ -96,13 +127,21 @@ function Reel({
       <span
         className="absolute inset-x-0 top-0 flex flex-col"
         style={{
-          transform: `translateY(-${(pos * 100) / REEL.length}%)`,
-          transition: animate ? `transform ${duration}ms ${easing}` : "none",
+          transform: `translateY(-${((pos + (creep ?? 0)) * 100) / REEL.length}%)`,
+          transition:
+            creep !== undefined
+              ? snapped
+                ? "none"
+                : `transform ${creepMs}ms linear`
+              : animate
+                ? `transform ${duration}ms ${easing}`
+                : "none",
         }}
         onTransitionEnd={() => {
           // Once settled, quietly move back to the first lap so the reel never runs out.
           if (pos >= 10) {
             setAnimate(false);
+            if (creep !== undefined) setSnapped(true);
             setPos(pos % 10);
           }
         }}

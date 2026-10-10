@@ -86,8 +86,10 @@ export function Intro({ onPick }: { onPick: (side: IntroSide) => void }) {
           accent={RED}
           word="Died"
           value={perYear(deaths, clock)}
-          // Each new death rolls in slowly, like a slot-machine reel settling.
-          roll={{ duration: 3500, easing: "cubic-bezier(0.45, 0, 0.25, 1.15)" }}
+          // The last digit creeps through the whole ~45 s gap, so each death arrives as the end of a slow roll.
+          fraction={clock === null ? undefined : ((clock.secs / SECONDS_PER_YEAR) * deaths) % 1}
+          // Digits that carry over (…9 → …0) still turn with a slow, settling roll.
+          roll={{ duration: 1500, easing: "cubic-bezier(0.45, 0, 0.25, 1.15)" }}
           rate={
             <>
               About <Num color={RED}>1</Num> every <Num color={RED}>{Math.round(SECONDS_PER_DEATH)}</Num> sec
@@ -122,6 +124,7 @@ function Panel({
   word,
   value,
   roll,
+  fraction,
   rate,
   dots,
 }: {
@@ -129,6 +132,7 @@ function Panel({
   word: string;
   value: number | null;
   roll: { duration: number; easing: string };
+  fraction?: number;
   rate: React.ReactNode;
   dots: string[];
 }) {
@@ -146,6 +150,7 @@ function Panel({
         cellLine="1em"
         duration={roll.duration}
         easing={roll.easing}
+        fraction={fraction}
         style={{ ...DISPLAY, color: accent }}
       />
       <p className="mt-1 text-2xl uppercase tracking-wider sm:text-3xl" style={DISPLAY}>

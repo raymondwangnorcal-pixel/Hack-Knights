@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Spectrogram } from "@/components/Spectrogram";
+import classifyMock from "@/mocks/classify.json";
 import { WakeGate, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
 import { LANGUAGES } from "@/lib/languages";
 import { DISEASE_LABEL, GENUS_INFO, carryInfo, listOr } from "@/lib/species";
@@ -155,16 +156,32 @@ export function ListenScreen() {
       return { url: URL.createObjectURL(blob), seconds };
     });
 
-  async function classify(audio: Blob, filename: string, id: number): Promise<ClassifyResponse> {
+  /** Sends the clip for identification. Never throws for a server problem: if even our own
+   *  route can't answer, it falls back to the labeled demo result so the screen never dead-ends. */
+  async function classify(audio: Blob, filename: string, id: number, recordedAt: string): Promise<ClassifyResponse> {
     const form = new FormData();
     form.append("audio", audio, filename);
     form.append("country", place.country);
     form.append("district", place.district);
-    const res = await fetch("/api/classify", { method: "POST", body: form });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? "Couldn't identify that clip");
+    form.append("client_id", crypto.randomUUID());
+    form.append("recorded_at", recordedAt);
+    let data: ClassifyResponse;
+    try {
+      const res = await fetch("/api/classify", { method: "POST", body: form, signal: AbortSignal.timeout(30_000) });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      data = (await res.json()) as ClassifyResponse;
+    } catch {
+      const mock = (classifyMock as Record<Country, ClassifyResponse>)[place.country];
+      data = { ...mock, detection_id: `offline-${Date.now()}`, is_simulated: true, fallback_reason: "Couldn't reach Mozzy's server" };
+    }
     if (id !== run.current) throw new Error("stale");
-    return data as ClassifyResponse;
+    return data;
+  }
+
+  function beginUpload() {
+    startedAt.current = performance.now();
+    setElapsed(0);
+    setStage("uploading");
   }
 
   function fail(e: unknown, id: number) {
@@ -179,6 +196,7 @@ export function ListenScreen() {
     const g = gate.current;
     if (!g?.stream || id !== run.current) return;
     g.pause();
+    const recordedAt = new Date().toISOString();
     setStage("recording");
     setEpoch((e) => e + 1); // the clip starts at 0 s on the spectrogram
     startedAt.current = performance.now();
@@ -190,9 +208,9 @@ export function ListenScreen() {
       gate.current = null;
       setAnalyser(null); // freeze the picture of the clip
       newClip(blob, CLIP_SECONDS);
-      setStage("uploading");
+      beginUpload();
       const ext = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
-      const data = await classify(blob, `clip.${ext}`, id);
+      const data = await classify(blob, `clip.${ext}`, id, recordedAt);
       setResult(data);
       setStage("result");
     } catch (e) {
@@ -249,7 +267,7 @@ export function ListenScreen() {
       setStage("sample");
       newClip(blob, buf.duration);
       // Identify while it plays; show the answer once the clip has finished.
-      const answer = classify(blob, SAMPLE[place.country].split("/").pop()!, id);
+      const answer = classify(blob, SAMPLE[place.country].split("/").pop()!, id, new Date().toISOString());
       answer.catch(() => {}); // handled below
       await new Promise<void>((done) => {
         src.onended = () => done();
@@ -259,7 +277,7 @@ export function ListenScreen() {
       ctx.close().catch(() => {});
       sampleCtx.current = null;
       setAnalyser(null);
-      setStage("uploading");
+      beginUpload();
       const data = await answer;
       setResult(data);
       setStage("result");
@@ -333,7 +351,7 @@ export function ListenScreen() {
 
   const district = risk[place.country].find((d) => d.district === place.district) ?? null;
   const timer =
-    stage === "result" && clip ? clip.seconds : stage === "recording" ? Math.min(CLIP_SECONDS, elapsed) : active ? elapsed : 0;
+    (stage === "result" || stage === "uploading") && clip ? clip.seconds : stage === "recording" ? Math.min(CLIP_SECONDS, elapsed) : active ? elapsed : 0;
 
   const HEADER: Record<Stage, string> = {
     idle: "Tap to listen",
@@ -413,6 +431,21 @@ export function ListenScreen() {
             >
               {clip && stage === "result" ? (replaying ? <PauseIcon size={18} /> : <PlayIcon size={18} />) : <MicIcon size={20} />}
             </button>
+          )}
+          {stage === "uploading" && (
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#13110F]/55" aria-live="polite">
+              <span className="identify-bar h-[2px] w-40 overflow-hidden bg-[#ECE6DA]/15" aria-hidden="true">
+                <span className="block h-full w-1/3" style={{ backgroundColor: ORANGE }} />
+              </span>
+              <span className="text-[22px] tracking-[0.16em] uppercase" style={DISPLAY}>
+                {elapsed > 6 ? "Still identifying…" : "Identifying…"}
+              </span>
+              {elapsed > 6 && (
+                <span className="text-[11px] tracking-[0.12em] uppercase opacity-60" style={MONO}>
+                  Slow connection; a demo answer shows if the model doesn&apos;t reply
+                </span>
+              )}
+            </div>
           )}
           {stage === "idle" && (
             <span
@@ -596,8 +629,21 @@ function ResultRow({
   const riskLevel = score == null ? null : score >= 67 ? 2 : score >= 34 ? 1 : 0;
   const riskColor = riskLevel === 2 ? RED : riskLevel === 1 ? ORANGE : TEAL;
   const dim = { opacity: 0.4 };
+  const pitchOnly = heard?.model_version?.startsWith("pitch-rule") ?? false;
+  const demoNote = !result?.is_simulated
+    ? null
+    : !result.fallback_reason || result.fallback_reason === "No model connected"
+      ? "Demo mode: no model is connected yet, so this is a sample answer, not an identification of your clip."
+      : `Demo result: ${result.fallback_reason.charAt(0).toLowerCase()}${result.fallback_reason.slice(1)}, so this is a sample answer, not your clip.`;
 
   return (
+    <>
+    {demoNote && (
+      <p className="mt-5 flex items-start gap-2.5 border border-[#F2B544]/35 bg-[#F2B544]/[0.07] px-3 py-2 text-[14px] leading-snug" style={COND} role="status">
+        <span className="mt-[5px] h-2 w-2 flex-none rounded-full" style={{ backgroundColor: AMBER }} aria-hidden="true" />
+        <span>{demoNote}</span>
+      </p>
+    )}
     <div className="grid grid-cols-2 gap-y-6 pt-6 lg:grid-cols-4 lg:divide-x lg:divide-[#ECE6DA]/20" style={COND}>
       {/* Species */}
       <div className="flex flex-col gap-1.5 pr-4 lg:pr-5">
@@ -607,8 +653,8 @@ function ResultRow({
             <span className="text-[26px] leading-[1.05] font-bold italic sm:text-[32px]">
               {heard.species ?? genusLabel}
             </span>
-            <span className="text-[15px] opacity-75">{heard.species ? carry?.common ?? `${genusLabel} mosquito` : "Genus only; species unsure"}</span>
-            {heard.is_simulated && <Chip>Simulated</Chip>}
+            <span className="text-[15px] opacity-75">{heard.species ? carry?.common ?? `${genusLabel} mosquito` : "Genus only · species unsure"}</span>
+            {heard.is_simulated && <Chip>Demo result</Chip>}
           </>
         ) : result ? (
           <>
@@ -630,7 +676,7 @@ function ResultRow({
           {confLevel?.[0] ?? "—"}
         </span>
         <span className="flex items-baseline gap-2">
-          <span className="text-[28px] font-bold leading-none sm:text-[32px]" style={{ color: TEAL, opacity: conf == null ? 0.4 : 1 }}>
+          <span className="text-[28px] font-bold leading-none sm:text-[32px]" style={{ color: confLevel?.[1] ?? TEAL, opacity: conf == null ? 0.4 : 1 }}>
             {conf == null ? "—" : `${conf}%`}
           </span>
           <span className="text-[15px] opacity-70">match</span>
@@ -647,6 +693,11 @@ function ResultRow({
           <span>0</span>
           <span>100</span>
         </span>
+        {conf != null && conf < 50 && (
+          <span className="mt-1 max-w-[220px] text-[13px] leading-snug opacity-75">
+            {pitchOnly ? "Pitch-only estimate." : "Rough guess."} Try again closer to the sound.
+          </span>
+        )}
       </div>
 
       {/* Risk near you */}
@@ -702,6 +753,7 @@ function ResultRow({
         )}
       </div>
     </div>
+    </>
   );
 }
 

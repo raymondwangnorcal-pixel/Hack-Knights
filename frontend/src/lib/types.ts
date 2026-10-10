@@ -24,6 +24,10 @@ export interface ClassifyResponse {
   top3: { species: string; probability: number }[];
   diseases: Disease[];
   is_simulated: boolean;
+  /** e.g. "pitch-rule-v1"; set when the real model answered */
+  model_version?: string;
+  /** Set when the model couldn't answer and this is the demo result instead, e.g. "Model service returned 422" */
+  fallback_reason?: string;
 }
 
 /** GET /api/risk?country= */

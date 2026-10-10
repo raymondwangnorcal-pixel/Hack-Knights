@@ -12,6 +12,23 @@ The frontend calls only the Next.js routes below. When `BUZZ_API_URL` is set, `c
 | `POST /api/voice` | (ElevenLabs, called from Next.js) | JSON `{ text, language }` | `audio/mpeg` |
 | `GET /api/voice` | (reads env) | | `{ languages: [] }`: languages with a voice configured |
 
+## What the Next.js classify route sends to FastAPI `POST /classify`
+
+Multipart fields, matching `backend/app/main.py`:
+
+| Field | Value |
+| --- | --- |
+| `audio` | the clip, original filename kept (`clip.webm`, `clip.m4a`, `anopheles-gambiae.wav`) |
+| `client_id` | a UUID per clip, made on the phone, so retries are de-duplicated |
+| `recorded_at` | ISO time the recording started, with timezone (`2026-10-10T19:03:22.000Z`) |
+| `country` | `NG` or `BR` |
+| `district_id` | from `src/lib/districtIds.ts`: Lagos → `NG-LA-` + letters-only upper-case name (`NG-LA-OSHODIISOLO`); every São Paulo neighbourhood → `BR-3550308` (São Paulo city) until the lists are aligned |
+| `source` | `phone` |
+| `device` | `web` |
+| `mime` | the clip's MIME type when known |
+
+**Fallbacks.** If the model can't answer (no `BUZZ_API_URL`, any non-2xx, 20 s timeout, unreachable), the route returns the mock result with `is_simulated: true` and `fallback_reason` (e.g. `"Model service returned 422"`); the screen labels it as a demo result. If the site's own route can't be reached, the screen does the same on the phone. `risk`, `detections` and `forecast` also serve mock data whenever FastAPI doesn't answer, so setting `BUZZ_API_URL` for classify never blanks the district list or the dashboard.
+
 ## `POST /classify` response
 
 ```json
@@ -28,6 +45,8 @@ The frontend calls only the Next.js routes below. When `BUZZ_API_URL` is set, `c
 ```
 
 - `species` is `null` when only the genus clears the threshold.
+- `confidence` may be `null` when `is_mosquito` is false; `top3` items may use `{genus, p}`. The Next.js route normalizes both, and passes `model_version` through (e.g. `pitch-rule-v1`).
+- Next.js adds `fallback_reason` (string) only on demo results.
 - `genus` is one of `anopheles`, `aedes`, `culex`, `other`.
 - `diseases` uses: `malaria`, `dengue`, `zika`, `chikungunya`, `yellow_fever`, `lymphatic_filariasis`, `west_nile`.
 - Audio arrives as WebM/Opus from Chrome or MP4/AAC from Safari, or WAV from the listening screen's Sample button; decode with ffmpeg or librosa. The upload keeps its original filename and extension.

@@ -4,7 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DISEASE_LABEL } from "@/lib/species";
 import RiskHeatMap from "@/components/RiskHeatMap";
-import type { Country, DistrictRisk, ForecastResponse, RiskResponse } from "@/lib/types";
+import ForecastChart from "@/components/ForecastChart";
+import type {
+  Country,
+  DetectionsResponse,
+  DistrictRisk,
+  ForecastResponse,
+  RiskResponse,
+} from "@/lib/types";
 
 // v0 dashboard: ranked districts, a 2D risk map, forecast and Gemini plan.
 // The three.js 3D columns and time slider replace <RiskMap2D> once this works end to end.
@@ -13,6 +20,7 @@ export default function DashboardPage() {
   const [country, setCountry] = useState<Country>("NG");
   const [risk, setRisk] = useState<RiskResponse | null>(null);
   const [selected, setSelected] = useState<DistrictRisk | null>(null);
+  const [detections, setDetections] = useState<DetectionsResponse | null>(null);
   // Keyed by district so stale results never show for a newly selected district.
   const [forecastFor, setForecastFor] = useState<ForecastResponse | null>(null);
   const [planFor, setPlanFor] = useState<{ district: string; text: string } | null>(null);
@@ -23,7 +31,11 @@ export default function DashboardPage() {
       .then((data: RiskResponse) => {
         setRisk(data);
         setSelected(data.districts[0] ?? null);
-      });
+        const since = new Date(Date.parse(data.updated_at) - 7 * 864e5).toISOString();
+        return fetch(`/api/detections?country=${data.country}&since=${encodeURIComponent(since)}`);
+      })
+      .then((r) => r.json())
+      .then(setDetections);
   }, [country]);
 
   useEffect(() => {
@@ -41,8 +53,10 @@ export default function DashboardPage() {
       .then((d) => setPlanFor({ district, text: d.text ?? "" }));
   }, [selected]);
 
-  const forecast = forecastFor?.district === selected?.district ? forecastFor : null;
-  const plan = planFor && planFor.district === selected?.district ? planFor.text : "";
+  // Keep the previous district's results on screen (dimmed) while the new ones load,
+  // so the page height stays put and the scroll position doesn't jump.
+  const forecastStale = !!forecastFor && forecastFor.district !== selected?.district;
+  const planStale = !!planFor && planFor.district !== selected?.district;
 
   const city = country === "NG" ? "Lagos" : country === "BR" ? "São Paulo" : "New York";
   const disease = country === "NG" ? "malaria" : country === "BR" ? "dengue" : "west_nile";
@@ -80,6 +94,7 @@ export default function DashboardPage() {
           {risk && (
             <RiskHeatMap
               districts={risk.districts}
+              detections={detections?.country === risk.country ? detections.detections : []}
               selected={selected?.district}
               onSelect={setSelected}
             />
@@ -112,17 +127,25 @@ export default function DashboardPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="rounded-2xl border p-4">
             <h2 className="font-semibold">
-              {selected.district}: {DISEASE_LABEL[selected.main_disease]} cases, next 4 weeks
+              {forecastFor ? forecastFor.district : selected.district}:{" "}
+              {DISEASE_LABEL[forecastFor ? forecastFor.disease : selected.main_disease]} cases, next 4
+              weeks
             </h2>
-            {forecast ? (
-              <ForecastBars forecast={forecast} />
+            {forecastFor ? (
+              <div className={`transition-opacity ${forecastStale ? "opacity-40" : ""}`}>
+                <ForecastChart forecast={forecastFor} />
+              </div>
             ) : (
               <p className="opacity-60">Loading forecast…</p>
             )}
           </section>
           <section className="rounded-2xl border p-4">
             <h2 className="font-semibold">Recommended actions</h2>
-            <p className="mt-2 whitespace-pre-line">{plan || "Generating…"}</p>
+            <p
+              className={`mt-2 whitespace-pre-line transition-opacity ${planStale ? "opacity-40" : ""}`}
+            >
+              {planFor?.text || "Generating…"}
+            </p>
           </section>
         </div>
       )}
@@ -131,26 +154,3 @@ export default function DashboardPage() {
   );
 }
 
-function ForecastBars({ forecast }: { forecast: ForecastResponse }) {
-  const max = Math.max(...forecast.weeks.map((w) => w.high));
-  return (
-    <div className="mt-4 flex h-48 items-end gap-4">
-      {forecast.weeks.map((w) => (
-        <div key={w.week_ahead} className="flex flex-1 flex-col items-center gap-1">
-          <div className="relative w-full" style={{ height: `${(w.high / max) * 100}%` }}>
-            <div
-              className="absolute inset-x-0 bottom-0 rounded-t bg-amber-500/25"
-              style={{ height: "100%" }}
-            />
-            <div
-              className="absolute inset-x-0 bottom-0 rounded-t bg-amber-500"
-              style={{ height: `${(w.mid / w.high) * 100}%` }}
-            />
-          </div>
-          <span className="text-xs tabular-nums">{w.mid.toLocaleString()}</span>
-          <span className="text-xs opacity-60">wk {w.week_ahead}</span>
-        </div>
-      ))}
-    </div>
-  );
-}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RollingNumber } from "@/components/RollingNumber";
+import { WatchingDropdown } from "@/components/WatchingDropdown";
 
 // The intro's masthead, pinned to the top of the window. As the first screen scrolls away the
 // bar shrinks, its tabs fade out (gone until you scroll back to the top), and the two live
@@ -88,6 +89,7 @@ export function StickyBar({
   const t = ramp(p, 0.2, 1);
   const stats = t * t * (3 - 2 * t); // smoothstep
   const words = stats;
+  const rowHeight = lerp(64, BAR_SHRUNK, p);
 
   return (
     <div
@@ -100,9 +102,9 @@ export function StickyBar({
     >
       {/* Main row */}
       <div
-        className="relative flex items-center gap-5 px-6 sm:px-10"
+        className="relative flex items-center gap-5 pr-14 pl-6 sm:pr-16 sm:pl-10"
         style={{
-          height: `${lerp(64, BAR_SHRUNK, p)}px`,
+          height: `${rowHeight}px`,
           ["--tag" as string]: String(1 - stats),
           ["--tagw" as string]: `${Math.round((1 - stats) * 420)}px`,
         }}
@@ -151,7 +153,7 @@ export function StickyBar({
 
         {/* Tabs: only at the very top */}
         <nav
-          className="absolute top-1/2 right-6 flex -translate-y-1/2 items-center gap-2 text-sm sm:right-10 sm:gap-6"
+          className="absolute top-1/2 right-14 flex -translate-y-1/2 items-center gap-2 text-sm sm:right-16 sm:gap-6"
           style={{ ...DISPLAY, opacity: tabs, visibility: tabsGone ? "hidden" : "visible" }}
           aria-hidden={tabsGone}
         >
@@ -177,6 +179,9 @@ export function StickyBar({
           </button>
         </nav>
       </div>
+
+      {/* Top-right corner: "while you've been watching" dropdown */}
+      <WatchingDropdown rowHeight={rowHeight} />
 
       {/* Below 1024px: counters on a second slim row */}
       <div

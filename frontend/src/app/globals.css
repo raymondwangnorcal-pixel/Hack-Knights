@@ -156,3 +156,15 @@ body {
 
 
 
+
+/* For prevention: pulsing dot beside "Live risk" while the detection stream is connected. */
+.live-dot {
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot { animation: none; }
+}

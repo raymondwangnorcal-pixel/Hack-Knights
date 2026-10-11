@@ -1,6 +1,7 @@
 "use client";
 
 import { LANGUAGES } from "@/lib/languages";
+import { pickSpoken } from "@/lib/spoken";
 import type { Language, PreventionResponse } from "@/lib/types";
 
 // The Prevention card in the poster palette: header with voice and language controls, a one-line
@@ -128,7 +129,11 @@ export function PreventionCard({
         ))}
       </ol>
       <p className="mt-auto pt-6 text-[15px] opacity-70" style={COND}>
-        {!data ? loadingFooter : data.source === "gemini" ? "By Gemini" : "From Mozzy guidance"}
+        {!data
+          ? loadingFooter
+          : `${data.source === "gemini" ? "By Gemini" : "From Mozzy guidance"}${
+              !pickSpoken(data, language).translated ? " · Translation unavailable, showing English" : ""
+            }`}
       </p>
     </section>
   );

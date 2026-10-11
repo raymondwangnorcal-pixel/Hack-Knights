@@ -121,6 +121,30 @@ export function ToSponsorsArrow() {
   );
 }
 
+/** The round up-arrow above the sponsor card: back to the top of the prevention screen. */
+function ToPreventionArrow() {
+  return (
+    <button
+      type="button"
+      onClick={() => scrollToId("start")}
+      className="group mx-auto flex flex-col items-center gap-2 pt-1 pb-2"
+      style={{ color: INK }}
+    >
+      <span
+        className="bob-arrow flex h-11 w-11 items-center justify-center rounded-full border border-[#ECE6DA]/30 bg-[#13110F] transition-colors group-hover:border-[#ECE6DA]/80"
+        aria-hidden="true"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 20V5M5.5 11.5 12 5l6.5 6.5" />
+        </svg>
+      </span>
+      <span className="text-[18px] leading-none tracking-[0.12em] uppercase" style={DISPLAY}>
+        Back to prevention
+      </span>
+    </button>
+  );
+}
+
 export function SponsorSection() {
   const [id, setId] = useState(SPONSORS[0].id);
 
@@ -140,81 +164,92 @@ export function SponsorSection() {
   const s = byId(id) ?? SPONSORS[0];
 
   return (
-    <section
+    // Fills the screen under the pinned header (86 px tall on small screens, 52 px on large). The card
+    // sits in the middle row, so it is vertically centered; the up-arrow fills the top row and an
+    // equal empty row below keeps the card exactly in the middle.
+    <div
       id={SPONSORS_ID}
-      aria-labelledby="sponsor-label"
-      className="flex scroll-mt-[86px] flex-col gap-[14px] border border-[#ECE6DA]/20 px-4 pt-4 pb-6 sm:gap-[18px] sm:px-7 sm:pt-6 sm:pb-8 lg:scroll-mt-[52px]"
-      style={{ color: INK }}
+      className="grid min-h-[calc(100svh-86px)] scroll-mt-[86px] grid-rows-[1fr_auto_1fr] gap-4 lg:min-h-[calc(100svh-52px)] lg:scroll-mt-[52px]"
     >
-      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 border-b border-[#ECE6DA]/20 pb-4 sm:pb-5">
-        <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
-          <span className="text-[22px] leading-none tracking-[0.18em] uppercase sm:text-[26px]" style={{ ...DISPLAY, color: ORANGE }}>
-            Sponsors
-          </span>
-          <label
-            id="sponsor-label"
-            htmlFor="sponsor-select"
-            className="text-[11px] tracking-[0.18em] text-[#ECE6DA]/80 uppercase"
-            style={TYPE}
-          >
-            {s.label}
-          </label>
-        </div>
-        <span className="relative inline-flex w-full min-[481px]:w-auto">
-          <select
-            id="sponsor-select"
-            value={id}
-            onChange={(e) => setId(e.target.value)}
-            className="min-h-12 w-full cursor-pointer appearance-none rounded-full border border-[#ECE6DA]/20 bg-[#13110F] pt-[13px] pr-12 pb-[11px] pl-5 text-xl leading-none tracking-wider text-[#ECE6DA] uppercase hover:border-[#ECE6DA]/60 focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[#F07636] min-[481px]:w-auto min-[481px]:min-w-[240px]"
-            style={DISPLAY}
-          >
-            {SPONSORS.map((o) => (
-              <option key={o.id} value={o.id} className="bg-[#13110F] normal-case" style={BODY}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 right-5 -translate-y-1/2 text-base"
-            style={{ color: ORANGE }}
-          >
-            ▾
-          </span>
-        </span>
+      <div className="flex items-end justify-center">
+        <ToPreventionArrow />
       </div>
-
-      <div
-        key={s.id}
-        className="sponsor-fade grid grid-cols-1 items-center gap-6 md:grid-cols-[minmax(0,1fr)_clamp(220px,28vw,320px)] md:gap-10"
+      <section
+        aria-labelledby="sponsor-label"
+        className="flex flex-col gap-[14px] border border-[#ECE6DA]/20 px-4 pt-4 pb-6 sm:gap-[18px] sm:px-7 sm:pt-6 sm:pb-8"
+        style={{ color: INK }}
       >
-        <div className="flex min-w-0 flex-col gap-[14px] sm:gap-[18px]">
-          <h2
-            className="m-0 text-[clamp(56px,10vw,104px)] leading-[0.85] tracking-wide uppercase"
-            style={{ ...DISPLAY, color: ORANGE }}
-          >
-            {s.name}
-          </h2>
-          <h3
-            className="m-0 text-[clamp(26px,4vw,36px)] leading-[1.05] tracking-wide text-balance uppercase"
-            style={DISPLAY}
-          >
-            {s.headline}
-          </h3>
-          <p className="m-0 max-w-[62ch] text-[21px] leading-[1.55] font-light text-[#ECE6DA]/90" style={BODY}>
-            {s.body}
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 border-b border-[#ECE6DA]/20 pb-4 sm:pb-5">
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+            <span className="text-[22px] leading-none tracking-[0.18em] uppercase sm:text-[26px]" style={{ ...DISPLAY, color: ORANGE }}>
+              Sponsors
+            </span>
+            <label
+              id="sponsor-label"
+              htmlFor="sponsor-select"
+              className="text-[11px] tracking-[0.18em] text-[#ECE6DA]/80 uppercase"
+              style={TYPE}
+            >
+              {s.label}
+            </label>
+          </div>
+          <span className="relative inline-flex w-full min-[481px]:w-auto">
+            <select
+              id="sponsor-select"
+              value={id}
+              onChange={(e) => setId(e.target.value)}
+              className="min-h-12 w-full cursor-pointer appearance-none rounded-full border border-[#ECE6DA]/20 bg-[#13110F] pt-[13px] pr-12 pb-[11px] pl-5 text-xl leading-none tracking-wider text-[#ECE6DA] uppercase hover:border-[#ECE6DA]/60 focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[#F07636] min-[481px]:w-auto min-[481px]:min-w-[240px]"
+              style={DISPLAY}
+            >
+              {SPONSORS.map((o) => (
+                <option key={o.id} value={o.id} className="bg-[#13110F] normal-case" style={BODY}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 right-5 -translate-y-1/2 text-base"
+              style={{ color: ORANGE }}
+            >
+              ▾
+            </span>
+          </span>
         </div>
-        <div className="order-first grid aspect-square w-[140px] place-items-center md:order-none md:w-auto md:p-4">
-          <Image
-            src={s.logo.src}
-            alt={`${s.name} logo`}
-            width={s.logo.width}
-            height={s.logo.height}
-            className="h-auto max-h-full w-auto max-w-full object-contain"
-          />
+
+        <div
+          key={s.id}
+          className="sponsor-fade grid grid-cols-1 items-center gap-6 md:grid-cols-[minmax(0,1fr)_clamp(220px,28vw,320px)] md:gap-10"
+        >
+          <div className="flex min-w-0 flex-col gap-[14px] sm:gap-[18px]">
+            <h2
+              className="m-0 text-[clamp(56px,10vw,104px)] leading-[0.85] tracking-wide uppercase"
+              style={{ ...DISPLAY, color: ORANGE }}
+            >
+              {s.name}
+            </h2>
+            <h3
+              className="m-0 text-[clamp(26px,4vw,36px)] leading-[1.05] tracking-wide text-balance uppercase"
+              style={DISPLAY}
+            >
+              {s.headline}
+            </h3>
+            <p className="m-0 max-w-[62ch] text-[21px] leading-[1.55] font-light text-[#ECE6DA]/90" style={BODY}>
+              {s.body}
+            </p>
+          </div>
+          <div className="order-first grid aspect-square w-[140px] place-items-center md:order-none md:w-auto md:p-4">
+            <Image
+              src={s.logo.src}
+              alt={`${s.name} logo`}
+              width={s.logo.width}
+              height={s.logo.height}
+              className="h-auto max-h-full w-auto max-w-full object-contain"
+            />
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+      <div aria-hidden="true" />
+    </div>
   );
 }

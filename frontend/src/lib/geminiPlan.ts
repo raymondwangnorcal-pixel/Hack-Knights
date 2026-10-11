@@ -1,10 +1,12 @@
 import type { Language, PreventionAction } from "./types";
+import { localizeAction, type ActionI18n } from "./localize.ts";
 
 // Gemini writes the explanation ("reason") for each action, for this district right now.
 // The built-in rules still decide which actions are safe to offer and their titles; Gemini ranks
 // the optional ones and writes why each matters here, from the district's own numbers.
 // Every written reason is checked: a number Gemini cites must appear in the data it was given, so it
-// can't invent figures. A reason that fails falls back to the built-in text for that action alone.
+// can't invent figures. A reason that fails falls back to the built-in text for that action alone,
+// translated from the built-in tables (localize.ts) so the card never mixes in English.
 //
 // Reply contract (both audiences):
 //   {"ids":["id1","id2","id3"],"actions":[{"id":"id1","title":"...","reason":"..."}, ...]}
@@ -52,7 +54,7 @@ interface ApplyOptions {
  * Turns Gemini's reply into the three actions to show, or null when the picks themselves are invalid.
  * Each action carries Gemini's reason when it passes the checks, otherwise the built-in one.
  */
-export function applyGeminiPlan(reply: GeminiReply | null, candidates: PreventionAction[], opts: ApplyOptions): PreventionAction[] | null {
+export function applyGeminiPlan(reply: GeminiReply | null, candidates: (PreventionAction & { i18n?: ActionI18n })[], opts: ApplyOptions): PreventionAction[] | null {
   const ids = reply?.ids;
   if (
     !Array.isArray(ids) || ids.length !== 3 || new Set(ids).size !== 3 ||
@@ -63,9 +65,9 @@ export function applyGeminiPlan(reply: GeminiReply | null, candidates: Preventio
   }
   const written = Array.isArray(reply?.actions) ? (reply!.actions as unknown[]) : [];
   return (ids as string[]).map((id) => {
-    const original = candidates.find((c) => c.id === id)!;
-    const builtIn = opts.language === "en" ? original : { ...original, language: "en" as const };
-    // Chemical (registry-linked) text stays curated word for word.
+    const { i18n, ...original } = candidates.find((c) => c.id === id)!;
+    const builtIn = localizeAction({ ...original, i18n }, opts.language);
+    // Chemical (registry-linked) text stays curated word for word (the built-in translation).
     if (original.registryUrl) return builtIn;
     const w = written.find((x) => (x as { id?: unknown })?.id === id) as { title?: unknown; reason?: unknown } | undefined;
     const reason = typeof w?.reason === "string" ? w.reason.trim() : "";
@@ -76,7 +78,7 @@ export function applyGeminiPlan(reply: GeminiReply | null, candidates: Preventio
     if (opts.language === "en") return { ...original, reason };
     const title = typeof w?.title === "string" ? w.title.trim() : "";
     const titleOk = title.length > 0 && title.length <= MAX_TITLE && numbersGrounded(title, opts.allowed) && !(opts.forbid?.test(title));
-    // A translated reason needs a translated title beside it; otherwise show the built-in English pair.
+    // A translated reason needs a translated title beside it; otherwise show the built-in pair.
     return titleOk ? { ...original, title, reason } : builtIn;
   });
 }

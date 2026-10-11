@@ -159,11 +159,11 @@ export function PreventionScreen() {
   }, [place.country, place.district, language, planKey]);
 
   const shownPlan = plan?.key === planKey ? plan.data : null;
-  // Titles in the chosen language are read in its voice; untranslated ones in the English voice.
+  // Only actions in the chosen language are read, in its own voice; never English in its place.
   // The play button reads the whole plan (titles and reasons); nothing plays until it is pressed.
   const spoken = useMemo(() => (shownPlan ? pickSpokenFull(shownPlan, language) : null), [shownPlan, language]);
   const voice = spoken?.voice ?? language;
-  const canSpeak = voiced.includes(voice);
+  const canSpeak = voiced.includes(voice) && (!spoken || spoken.lines.length > 0);
 
   function speak() {
     if (!spoken?.lines.length) return;

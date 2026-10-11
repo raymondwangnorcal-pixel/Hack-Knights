@@ -6,6 +6,7 @@ import classifyMock from "@/mocks/classify.json";
 import { WakeGate, listMics, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
 import { stopSpeaking, toggleSpeak, unlockAudio, useVoiceState } from "@/lib/voice";
 import { LANGUAGES } from "@/lib/languages";
+import { tr } from "@/lib/localize";
 import { pickSpoken } from "@/lib/spoken";
 import { SpinnerIcon } from "@/components/PreventionCard";
 import { DISEASE_LABEL, GENUS_INFO, carryInfo, listOr } from "@/lib/species";
@@ -377,11 +378,11 @@ export function ListenScreen() {
 
   const shownPrevention = prevention?.key === preventionKey ? prevention.data : null;
 
-  // Titles in the chosen language are read in its voice; untranslated ones in the English voice.
+  // Only titles in the chosen language are read, in its own voice; never English in its place.
   const spoken = useMemo(() => (shownPrevention ? pickSpoken(shownPrevention, language) : null), [shownPrevention, language]);
   const voice = spoken?.voice ?? language;
   const spokenTitles = useMemo(() => spoken?.titles ?? [], [spoken]);
-  const canSpeak = voiced.includes(voice);
+  const canSpeak = voiced.includes(voice) && (!spoken || spokenTitles.length > 0);
 
   const voiceState = useVoiceState();
   const speaking = voiceState === "playing";
@@ -632,7 +633,7 @@ export function ListenScreen() {
 
         <p className="border-b border-[#ECE6DA]/20 py-3 text-[14px] leading-snug opacity-70" style={COND} aria-label="Mosquito evidence">
           {shownPrevention
-            ? `${shownPrevention.context}${shownPrevention.basis === "general" ? " · General guidance" : ""}`
+            ? `${shownPrevention.context}${shownPrevention.basis === "general" ? ` · ${tr(language, "c.general")}` : ""}`
             : "Checking local mosquito data…"}
         </p>
 
@@ -653,8 +654,8 @@ export function ListenScreen() {
                   </summary>
                   <p className="mt-3 max-w-prose text-[16px] leading-snug opacity-75" style={COND}>{item.reason}</p>
                   <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm underline underline-offset-2" style={COND}>
-                    <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Why this action ↗</a>
-                    {item.registryUrl && <a href={item.registryUrl} target="_blank" rel="noopener noreferrer">Check registration and label ↗</a>}
+                    <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">{tr(language, "u.why")}</a>
+                    {item.registryUrl && <a href={item.registryUrl} target="_blank" rel="noopener noreferrer">{tr(language, "u.registry")}</a>}
                   </div>
                 </details>
               ) : (
@@ -669,7 +670,7 @@ export function ListenScreen() {
           {!shownPrevention
             ? "Preparing advice for your district."
             : `By Gemini${
-                spoken && !spoken.translated ? " · Translation unavailable, showing English" : ""
+                spoken && !spoken.translated ? ` · ${tr(language, "u.noTranslation")}` : ""
               }`}
         </p>
       </section>

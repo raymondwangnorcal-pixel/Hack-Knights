@@ -1,4 +1,5 @@
-import type { Country, Disease, Genus, PreventionAction } from "./types";
+import type { Country, Disease, Genus, Language, PreventionAction } from "./types";
+import { phrase, tr, type ActionI18n, type Phrase } from "./localize.ts";
 
 // Actions for a district health team on the "For prevention" side. Same shape as the household
 // actions in prevention.ts: the server assembles an approved set grounded on the district's
@@ -63,136 +64,116 @@ export function forecastTrend(ctx: Pick<HealthTeamContext, "forecast">): "rising
 
 const recentRain = (ctx: HealthTeamContext) => ctx.rainMm !== null && ctx.rainMm >= 2;
 
-/** "Ikeja ranks 1 of 8 (risk 82/100), with 34 detections in the last 7 days" */
-function standing(ctx: HealthTeamContext): string {
-  const parts: string[] = [];
+/** "Ikeja ranks 1 of 8 (risk 82/100), with 34 detections in the last 7 days." */
+function standing(ctx: HealthTeamContext): Phrase | null {
+  const det = ctx.detections7d;
   if (ctx.rank !== null && ctx.districtCount !== null && ctx.riskScore !== null) {
-    parts.push(`${ctx.district} ranks ${ctx.rank} of ${ctx.districtCount} (risk ${ctx.riskScore}/100)`);
-  } else if (ctx.riskScore !== null) {
-    parts.push(`${ctx.district} has a risk score of ${ctx.riskScore}/100`);
+    const vars = { district: ctx.district, rank: ctx.rank, count: ctx.districtCount, score: ctx.riskScore };
+    return det !== null ? phrase("h.standRankDet", { ...vars, detections: det }) : phrase("h.standRank", vars);
   }
-  if (ctx.detections7d !== null) parts.push(`${ctx.detections7d} detections in the last 7 days`);
-  return parts.length ? `${parts.join(", with ")}.` : "";
+  if (ctx.riskScore !== null) {
+    const vars = { district: ctx.district, score: ctx.riskScore };
+    return det !== null ? phrase("h.standScoreDet", { ...vars, detections: det }) : phrase("h.standScore", vars);
+  }
+  return det !== null ? phrase("h.standDet", { detections: det }) : null;
 }
 
-function rainNote(ctx: HealthTeamContext): string {
-  return recentRain(ctx) ? ` About ${Math.round(ctx.rainMm!)} mm of rain fell in the last 72 hours, so new breeding sites are likely.` : "";
+function rainNote(ctx: HealthTeamContext): Phrase | null {
+  return recentRain(ctx) ? phrase("h.rain", { mm: Math.round(ctx.rainMm!) }) : null;
 }
 
-function forecastNote(ctx: HealthTeamContext): string {
+function forecastNote(ctx: HealthTeamContext): Phrase | null {
   const f = ctx.forecast;
-  if (!f) return "";
+  if (!f) return null;
   const trend = forecastTrend(ctx);
-  const w1 = Math.round(f.week1);
-  const w4 = Math.round(f.week4);
-  const range = `likely ${Math.round(f.low4)}–${Math.round(f.high4)}`;
-  return trend === "flat"
-    ? ` ${f.unit[0].toUpperCase()}${f.unit.slice(1)} should hold near ${w4} a week over the next 4 weeks (${range}).`
-    : ` ${f.unit[0].toUpperCase()}${f.unit.slice(1)} are forecast to ${trend === "rising" ? "rise" : "fall"} from about ${w1} to ${w4} a week over the next 4 weeks (${range}).`;
+  const unit = /pool/i.test(f.unit) ? "Pools" : "Cases";
+  const kind = trend === "flat" ? "Flat" : trend === "rising" ? "Rise" : "Fall";
+  return phrase(`h.fc${kind}${unit}`, {
+    w1: Math.round(f.week1), w4: Math.round(f.week4), low: Math.round(f.low4), high: Math.round(f.high4),
+  });
 }
 
-function action(id: string, title: string, reason: string, sourceUrl: string, registryUrl?: string): PreventionAction {
-  return { id, title, reason: reason.trim(), sourceUrl, ...(registryUrl ? { registryUrl } : {}) };
+type CandidateAction = PreventionAction & { i18n?: ActionI18n };
+
+// English comes from en.json so the built-in translations always match it. A reason may be built
+// from several sentences (standing, rain, the action itself, forecast); missing ones are skipped.
+function action(id: string, title: Phrase, reason: (Phrase | null)[], sourceUrl: string, registryUrl?: string): CandidateAction {
+  const parts = reason.filter((p): p is Phrase => p !== null);
+  return {
+    id,
+    title: tr("en", title.key, title.vars),
+    reason: parts.map((p) => tr("en", p.key, p.vars)).join(" ").trim(),
+    sourceUrl,
+    ...(registryUrl ? { registryUrl } : {}),
+    i18n: { title, reason: parts },
+  };
 }
 
-function communityAlerts(ctx: HealthTeamContext, message: string): PreventionAction {
-  return action(
-    "community-alerts",
-    "Send SMS and radio alerts",
-    `Reach households in ${ctx.district} in local languages: ${message}`,
-    WHO_RISK_COMMS,
-  );
+function communityAlerts(ctx: HealthTeamContext, key: string): CandidateAction {
+  return action("community-alerts", phrase("t.alerts"), [phrase(key, { district: ctx.district })], WHO_RISK_COMMS);
 }
 
-function confirmTraps(ctx: HealthTeamContext, trapName: string): PreventionAction {
+function confirmTraps(ctx: HealthTeamContext, traps: "lightTraps" | "ovitraps"): CandidateAction {
   return action(
     "confirm-traps",
-    `Place ${trapName} to confirm the signal`,
-    `Phone detections are opportunistic and skew toward phone owners. A few ${trapName} in ${ctx.district} confirm which mosquitoes are present before larger spending.`,
+    phrase(`t.${traps}`),
+    [phrase(`h.${traps}`, { district: ctx.district })],
     ctx.country === "BR" ? BRAZIL_CONTROL : WHO_LSM,
   );
 }
 
-function malariaActions(ctx: HealthTeamContext): PreventionAction[] {
+function malariaActions(ctx: HealthTeamContext): CandidateAction[] {
+  const d = { district: ctx.district };
   return [
     action(
       "larval-sources",
-      recentRain(ctx) ? "Target rain-fed breeding pools" : "Map and drain shallow breeding pools",
-      `${standing(ctx)}${rainNote(ctx)} Send teams to drain or fill shallow pools and puddles; larviciding is a supplement where sites are few, fixed and findable.`,
+      phrase(recentRain(ctx) ? "t.rainPools" : "t.drainPools"),
+      [standing(ctx), rainNote(ctx), phrase("h.larval")],
       WHO_LSM,
     ),
-    action(
-      "net-campaign",
-      "Distribute treated nets to top wards",
-      `Insecticide-treated nets are the core malaria vector control tool. Prioritise households in ${ctx.district} without a net or with nets older than about three years.`,
-      WHO_VECTOR,
-    ),
-    action(
-      "clinic-readiness",
-      "Stock rapid tests and ACTs at clinics",
-      `Ask clinics in ${ctx.district} to test every fever and hold enough rapid tests and artemisinin-based treatment.${forecastNote(ctx)}`,
-      WHO_MALARIA,
-    ),
-    communityAlerts(ctx, "sleep under a net every night and get tested within a day of any fever."),
-    confirmTraps(ctx, "light traps"),
+    action("net-campaign", phrase("t.netCampaign"), [phrase("h.netCampaign", d)], WHO_VECTOR),
+    action("clinic-readiness", phrase("t.clinicMalaria"), [phrase("h.clinicMalaria", d), forecastNote(ctx)], WHO_MALARIA),
+    communityAlerts(ctx, "h.alertsMalaria"),
+    confirmTraps(ctx, "lightTraps"),
   ];
 }
 
-function dengueActions(ctx: HealthTeamContext): PreventionAction[] {
+function dengueActions(ctx: HealthTeamContext): CandidateAction[] {
+  const d = { district: ctx.district };
   return [
     action(
       "container-sweep",
-      recentRain(ctx) ? "Sweep rain-filled containers house to house" : "Run house-to-house container checks",
-      `${standing(ctx)}${rainNote(ctx)} Send field agents to empty, scrub or cover water tanks, buckets, tyres and plant pots, where most breeding happens.`,
+      phrase(recentRain(ctx) ? "t.sweepRain" : "t.sweep"),
+      [standing(ctx), rainNote(ctx), phrase("h.sweep")],
       BRAZIL_CONTROL,
     ),
     action(
       "fixed-water-larvicide",
-      "Treat water that cannot be removed",
-      `Where containers cannot be emptied or covered, field agents can apply a larvicide ${ctx.country === "BR" ? "approved by the Ministry of Health" : "registered locally"}. Use only registered products according to their label for that water site.`,
+      phrase("t.fixedWater"),
+      [phrase(ctx.country === "BR" ? "h.fixedWaterBR" : "h.fixedWater")],
       ctx.country === "BR" ? BRAZIL_LARVICIDES : CDC_LARVICIDES,
       REGISTRY[ctx.country],
     ),
-    action(
-      "clinic-readiness",
-      "Prepare clinics for a dengue rise",
-      `Brief clinics in ${ctx.district} on warning signs and oral and IV fluids, and check test stock.${forecastNote(ctx)}`,
-      WHO_DENGUE,
-    ),
-    communityAlerts(ctx, "empty standing water weekly, use repellent during the day, and seek care for fever with severe pain."),
+    action("clinic-readiness", phrase("t.clinicDengue"), [phrase("h.clinicDengue", d), forecastNote(ctx)], WHO_DENGUE),
+    communityAlerts(ctx, "h.alertsDengue"),
     confirmTraps(ctx, "ovitraps"),
   ];
 }
 
-function westNileActions(ctx: HealthTeamContext): PreventionAction[] {
+function westNileActions(ctx: HealthTeamContext): CandidateAction[] {
+  const d = { district: ctx.district };
   return [
     action(
       "catch-basins",
-      recentRain(ctx) ? "Treat storm drains after the rain" : "Treat catch basins and storm drains",
-      `${standing(ctx)}${rainNote(ctx)} Culex mosquitoes breed in catch basins and stagnant drains; treat them with a registered larvicide according to its label.`,
+      phrase(recentRain(ctx) ? "t.drainsRain" : "t.drains"),
+      [standing(ctx), rainNote(ctx), phrase("h.drains")],
       CDC_LARVICIDES,
       REGISTRY[ctx.country],
     ),
-    action(
-      "pool-testing",
-      "Expand mosquito pool testing",
-      `Trap and test more mosquito pools in ${ctx.district} for West Nile virus to track how far it has spread.${forecastNote(ctx)}`,
-      CDC_WNV,
-    ),
-    action(
-      "clinician-advisory",
-      "Issue a clinician advisory",
-      `Remind clinicians in ${ctx.district} to test for West Nile virus in patients with fever, meningitis or encephalitis, and to report cases promptly.`,
-      CDC_WNV,
-    ),
-    communityAlerts(ctx, "use repellent from dusk to dawn, repair window screens, and empty water from containers."),
-    action(
-      "adult-control-review",
-      "Review targeted adult control",
-      "If positive pools keep rising, assess targeted adult mosquito control under your local plan and product labels.",
-      CDC_WNV,
-      REGISTRY[ctx.country],
-    ),
+    action("pool-testing", phrase("t.poolTesting"), [phrase("h.poolTesting", d), forecastNote(ctx)], CDC_WNV),
+    action("clinician-advisory", phrase("t.clinician"), [phrase("h.clinician", d)], CDC_WNV),
+    communityAlerts(ctx, "h.alertsWnv"),
+    action("adult-control-review", phrase("t.adultControl"), [phrase("h.adultControl")], CDC_WNV, REGISTRY[ctx.country]),
   ];
 }
 
@@ -201,7 +182,7 @@ function westNileActions(ctx: HealthTeamContext): PreventionAction[] {
  * action and is mandatory; when the district is high-risk or the forecast is rising, clinic
  * readiness moves up to second.
  */
-export function healthTeamCandidates(ctx: HealthTeamContext): PreventionAction[] {
+export function healthTeamCandidates(ctx: HealthTeamContext): CandidateAction[] {
   const list =
     ctx.disease === "west_nile" ? westNileActions(ctx)
     : ctx.disease === "malaria" ? malariaActions(ctx)
@@ -216,30 +197,34 @@ export function healthTeamCandidates(ctx: HealthTeamContext): PreventionAction[]
 }
 
 /** The numbers behind the plan as labeled cells for the Action plan card. */
-export function healthTeamStats(ctx: HealthTeamContext): { label: string; value: string }[] {
+export function healthTeamStats(ctx: HealthTeamContext, language: Language = "en"): { label: string; value: string }[] {
+  const t = (key: string, vars?: Record<string, string | number>) => tr(language, key, vars);
+  const pools = /pool/i.test(ctx.forecast?.unit ?? "");
   const cells: { label: string; value: string }[] = [];
-  if (ctx.riskScore !== null) cells.push({ label: "Risk", value: `${ctx.riskScore}/100` });
-  if (ctx.rank !== null && ctx.districtCount !== null) cells.push({ label: "Rank", value: `#${ctx.rank} of ${ctx.districtCount}` });
-  if (ctx.detections7d !== null) cells.push({ label: "Detections", value: `${ctx.detections7d} in 7 days` });
+  if (ctx.riskScore !== null) cells.push({ label: t("s.risk"), value: `${ctx.riskScore}/100` });
+  if (ctx.rank !== null && ctx.districtCount !== null) cells.push({ label: t("s.rank"), value: t("s.rankValue", { rank: ctx.rank, count: ctx.districtCount }) });
+  if (ctx.detections7d !== null) cells.push({ label: t("s.detections"), value: t("s.detectionsValue", { detections: ctx.detections7d }) });
   // Zero usually means no case reports for the district yet, not zero cases, so it is left out.
-  if (ctx.cases14d) cells.push({ label: "Reported", value: `${ctx.cases14d} ${ctx.forecast?.unit ?? "cases"} in 14 days` });
+  if (ctx.cases14d) cells.push({ label: t("s.reported"), value: t(pools ? "s.reportedPools" : "s.reportedCases", { n: ctx.cases14d }) });
   const trend = forecastTrend(ctx);
-  if (trend) cells.push({ label: "Cases", value: trend === "rising" ? "Rising" : trend === "falling" ? "Falling" : "Steady" });
-  if (ctx.regionalGenus) cells.push({ label: "Mosquito", value: `Mostly ${genusName(ctx.regionalGenus)}` });
+  if (trend) cells.push({ label: t("s.cases"), value: t(trend === "rising" ? "s.rising" : trend === "falling" ? "s.falling" : "s.steady") });
+  if (ctx.regionalGenus) cells.push({ label: t("s.mosquito"), value: t("s.mostly", { genus: genusName(ctx.regionalGenus) }) });
   return cells;
 }
 
 /** One short line above the actions: the numbers the plan is grounded on,
  *  e.g. "Risk 70/100 · #1 of 20 · 42 detections in 7 days · Cases rising · Mostly Anopheles". */
-export function healthTeamContextLine(ctx: HealthTeamContext): string {
+export function healthTeamContextLine(ctx: HealthTeamContext, language: Language = "en"): string {
+  const t = (key: string, vars?: Record<string, string | number>) => tr(language, key, vars);
+  const pools = /pool/i.test(ctx.forecast?.unit ?? "");
   const parts: string[] = [];
-  if (ctx.riskScore !== null) parts.push(`Risk ${ctx.riskScore}/100`);
-  if (ctx.rank !== null && ctx.districtCount !== null) parts.push(`#${ctx.rank} of ${ctx.districtCount}`);
-  if (ctx.detections7d !== null) parts.push(`${ctx.detections7d} detections in 7 days`);
+  if (ctx.riskScore !== null) parts.push(t("c.risk", { score: ctx.riskScore }));
+  if (ctx.rank !== null && ctx.districtCount !== null) parts.push(t("s.rankValue", { rank: ctx.rank, count: ctx.districtCount }));
+  if (ctx.detections7d !== null) parts.push(t("c.detections", { detections: ctx.detections7d }));
   // Zero usually means no case reports for the district yet, not zero cases, so it is left out.
-  if (ctx.cases14d) parts.push(`${ctx.cases14d} ${ctx.forecast?.unit ?? "cases"} in 14 days`);
+  if (ctx.cases14d) parts.push(t(pools ? "s.reportedPools" : "s.reportedCases", { n: ctx.cases14d }));
   const trend = forecastTrend(ctx);
-  if (trend) parts.push(`Cases ${trend === "flat" ? "steady" : trend}`);
-  if (ctx.regionalGenus) parts.push(`Mostly ${genusName(ctx.regionalGenus)}`);
+  if (trend) parts.push(t(trend === "flat" ? "c.casesSteady" : trend === "rising" ? "c.casesRising" : "c.casesFalling"));
+  if (ctx.regionalGenus) parts.push(t("s.mostly", { genus: genusName(ctx.regionalGenus) }));
   return parts.length ? parts.join(" · ") : `${DISEASE_NAME[ctx.disease]} data unavailable`;
 }

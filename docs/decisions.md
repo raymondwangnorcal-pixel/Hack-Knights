@@ -542,3 +542,15 @@
 - Supersedes: none (refines DEC-0002)
 - Evidence: https://elevenlabs.io/docs/help-center/other/what-languages-do-you-support ; session conversation of 2026-10-10.
 - Privacy waivers: none
+
+## DEC-0037 — Prevention cards are fully translated; no English voice fallback
+
+- Date: 2026-10-11
+- Owner: user
+- Status at record: active
+- Decision: Every string on both Prevention cards (For you and For prevention) has a built-in translation in all seven non-English languages: action titles and reasons, chemical (Bti/larvicide) actions, the evidence row and the card links. When Gemini is unavailable, or one of its answers fails a check, that action falls back to the built-in translation, not English. Speech reads only text in the chosen language, in that language's voice. The English voice is never swapped in, so Yoruba is translated text with no play button. The voice route also refuses Yoruba and Cantonese unless ELEVENLABS_MODEL_<LANG> is set on purpose.
+- Rationale: The Gemini key is on the free tier, so quota errors left reasons in English and Yoruba entirely in English, and the English voice then read that English. The user chose to translate the chemical actions too (keeping the registry link and label warning) and to keep Yoruba text-only, because no ElevenLabs model (v2, v3 or v4) lists Yoruba. Cantonese stays text-only by choice, even though eleven_v4 now supports it.
+- Scope: frontend/src/lib/localize.ts, frontend/src/lib/i18n/*.json, prevention.ts, healthTeam.ts, geminiPlan.ts, spoken.ts, /api/prevention, /api/voice, ListenScreen, PreventionCard, PreventionScreen.
+- Supersedes: the English-voice fallback in DEC-0036 and the curated-English rule for chemical actions
+- Evidence: https://elevenlabs.io/docs/help-center/other/what-languages-do-you-support ; https://elevenlabs.io/docs/overview/capabilities/text-to-speech/eleven-v4 ; session conversation of 2026-10-11.
+- Privacy waivers: none

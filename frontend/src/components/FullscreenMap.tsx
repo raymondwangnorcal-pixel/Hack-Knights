@@ -5,10 +5,12 @@ import RiskHeatMap from "@/components/RiskHeatMap";
 import { SLIDE_MS, SlideStage } from "@/components/SlideStage";
 import { InfoTip } from "@/components/InfoTip";
 import { RISK_SCORE_BODY, RISK_SCORE_CITY_NOTE, RISK_SCORE_TITLE } from "@/lib/riskHelp";
-import { DOT_GRADIENT } from "@/lib/dotColors";
+import { ORANGE_DOTS, paletteGradient } from "@/lib/dotColors";
 import { CITIES, CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus, type MapView } from "@/lib/cities";
+import { loadUsTestDots } from "@/lib/usTestDots";
 import type {
   Country,
+  Detection,
   DetectionsResponse,
   DistrictRisk,
   RiskResponse,
@@ -20,14 +22,20 @@ const INK = "#ECE6DA";
 const ORANGE = "#F07636";
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 const COUNTRIES: Country[] = ["NG", "BR", "US"];
+// The USA map shows simulated West Nile detections generated from the CDC's county map plus heat, water and population
+// (scripts/build_us_test_dots.py) instead of the database's US detections.
+type MapKey = Country;
+const MAPS: MapKey[] = ["NG", "BR", "US"];
+const baseOf = (k: MapKey): Country => k;
+const MAP_LABEL: Record<MapKey, string> = { NG: "Nigeria", BR: "Brazil", US: "USA" };
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 
 // The home page's "View in full screen": the /dashboard map experience (country slides, city and district
 // labels, forecast pill, zoom buttons, legend), as an overlay that grows out of the home page's map box.
 // It is a port of app/dashboard/page.tsx, which is kept as it was.
 
-// TEMPORARY: how many days of detections are drawn as dots (the numbers in the panel stay 7-day figures).
-const DOT_DAYS = 30;
+// How many days of detections are drawn as dots (7 matches the main app; the numbers in the panel are 7-day figures).
+const DOT_DAYS = 7;
 const OPEN_MS = 900;
 const CLOSE_MS = 700;
 const GROW = "cubic-bezier(0.45, 0, 0.12, 1)"; // eases in, then a long soft landing
@@ -65,14 +73,15 @@ function boxWindow(box: DOMRect) {
 const FULL_WINDOW = { transform: "translate3d(0px, 0px, 0)", clipPath: "inset(0px 0px 0px 0px)" };
 
 export default function FullscreenMap({ open, startCountry, startDistrict, originRef, homeView, onClose }: FullscreenMapProps) {
-  const [country, setCountry] = useState<Country>(startCountry);
+  const [country, setCountry] = useState<MapKey>(startCountry);
+  const base = baseOf(country); // the country whose data this map shows
   const [slideDir, setSlideDir] = useState<1 | -1>(1);
   const sliding = useRef(false);
   const resetCount = useRef(0);
   const [panelOpen, setPanelOpen] = useState(false);
   // Maps stay mounted while off-screen, so a map left zoomed on a city is sent back to the whole-country
   // view (after the slide, where nobody sees it) for when you return.
-  const [resets, setResets] = useState<Partial<Record<Country, number>>>({});
+  const [resets, setResets] = useState<Partial<Record<MapKey, number>>>({});
   // All three countries are fetched up front, so switching never waits on the network mid-slide.
   const [data, setData] = useState<Partial<Record<Country, { risk: RiskResponse; detections: DetectionsResponse }>>>({});
   const [picked, setPicked] = useState<DistrictRisk | null>(null);
@@ -81,7 +90,8 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
   const [focus, setFocus] = useState<MapFocus | null>(null);
   // Keyed by district so stale results never show for a newly selected district.
   const [planFor, setPlanFor] = useState<{ district: string; text: string } | null>(null);
-  const risk = data[country]?.risk ?? null;
+  const [usDots, setUsDots] = useState<Detection[]>([]);
+  const risk = data[base]?.risk ?? null;
   // Clicking a city that has data selects the whole city (Lagos, São Paulo, New York) as one summed-up area;
   // clicking a district inside it selects just that district. Nothing is selected until the first click.
   const cityRisk = useMemo(() => {
@@ -105,11 +115,22 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
     };
     return city;
   }, [risk]);
-  const cityHere = pickedCity && CITIES[country].some((c) => c.name === pickedCity.name) ? pickedCity : null;
-  const selected = picked?.country === country ? picked : cityHere?.hasData ? cityRisk : null;
+  const cityHere = pickedCity && CITIES[base].some((c) => c.name === pickedCity.name) ? pickedCity : null;
+  const selected = picked?.country === base ? picked : cityHere?.hasData ? cityRisk : null;
   const isCity = !!selected && selected === cityRisk;
   // A city on the map with no data behind it yet.
-  const noDataCity = !picked || picked.country !== country ? (cityHere && !cityHere.hasData ? cityHere : null) : null;
+  const noDataCity = !picked || picked.country !== base ? (cityHere && !cityHere.hasData ? cityHere : null) : null;
+
+  useEffect(() => {
+    let alive = true;
+    loadUsTestDots(DOT_DAYS).then(
+      (d) => alive && setUsDots(d),
+      (err) => console.error("[fullscreen map] could not load the simulated USA dots", err),
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     COUNTRIES.forEach((c) => {
@@ -130,16 +151,16 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
   // dots, debounced so a burst of uploads costs one request.
   useEffect(() => {
     if (!open) return; // only listen while the map is actually on screen
-    const es = new EventSource(`/api/stream?country=${country}`);
+    const es = new EventSource(`/api/stream?country=${base}`);
     let timer: ReturnType<typeof setTimeout> | undefined;
     es.addEventListener("detection", () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         const since = new Date(Date.now() - DOT_DAYS * 864e5).toISOString();
-        fetch(`/api/detections?country=${country}&since=${encodeURIComponent(since)}`)
+        fetch(`/api/detections?country=${base}&since=${encodeURIComponent(since)}`)
           .then((r) => r.json())
           .then((d: DetectionsResponse) => {
-            if (d.country === country) setData((prev) => (prev[country] ? { ...prev, [country]: { ...prev[country], detections: d } } : prev));
+            if (d.country === base) setData((prev) => (prev[base] ? { ...prev, [base]: { ...prev[base], detections: d } } : prev));
           });
       }, 1500);
     });
@@ -147,7 +168,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
       clearTimeout(timer);
       es.close();
     };
-  }, [country, open]);
+  }, [base, open]);
 
   useEffect(() => {
     if (!selected) return;
@@ -164,8 +185,8 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
   // Keep the previous plan on screen (dimmed) while the new one loads, so the panel doesn't jump.
   const planStale = !!planFor && planFor.district !== selected?.district;
 
-  const city = country === "NG" ? "Lagos" : country === "BR" ? "São Paulo" : "New York";
-  const disease = country === "NG" ? "malaria" : country === "BR" ? "dengue" : "west_nile";
+  const countryName = MAP_LABEL[country];
+  const disease = base === "NG" ? "malaria" : base === "BR" ? "dengue" : "west_nile";
 
   const selectCity = (c: City) => {
     setActiveCity(c);
@@ -186,7 +207,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
     setPanelOpen(true);
     setFocus({ key: Date.now(), lat: d.lat, lng: d.lng, zoom: DISTRICT_ZOOM });
   };
-  const changeCountry = (c: Country, dir?: 1 | -1) => {
+  const changeCountry = (c: MapKey, dir?: 1 | -1) => {
     if (sliding.current) return;
     if (c === country) {
       // The current country's button doubles as "zoom all the way out": back to the whole-country view.
@@ -196,10 +217,10 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
       setFocus({ key: -(resetCount.current += 1), reset: true });
       return;
     }
-    if (!data[c]) return;
+    if (!data[baseOf(c)]) return;
     sliding.current = true;
     setTimeout(() => (sliding.current = false), SLIDE_MS + 100);
-    setSlideDir(dir ?? (COUNTRIES.indexOf(c) > COUNTRIES.indexOf(country) ? 1 : -1));
+    setSlideDir(dir ?? (MAPS.indexOf(c) > MAPS.indexOf(country) ? 1 : -1));
     const leaving = country;
     setTimeout(() => setResets((r) => ({ ...r, [leaving]: Date.now() })), SLIDE_MS + 200);
     setCountry(c);
@@ -207,13 +228,13 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
     setFocus(null);
   };
   // Arrows wrap around: past the last country comes the first.
-  const step = (dir: 1 | -1) => changeCountry(COUNTRIES[(COUNTRIES.indexOf(country) + dir + COUNTRIES.length) % COUNTRIES.length], dir);
+  const step = (dir: 1 | -1) => changeCountry(MAPS[(MAPS.indexOf(country) + dir + MAPS.length) % MAPS.length], dir);
 
   // One map camera handle per country, so the home page's view can be carried into (and back out of) this one.
   const viewNG = useRef<MapView | null>(null);
   const viewBR = useRef<MapView | null>(null);
   const viewUS = useRef<MapView | null>(null);
-  const viewRefs: Record<Country, MutableRefObject<MapView | null>> = { NG: viewNG, BR: viewBR, US: viewUS };
+  const viewRefs: Record<MapKey, MutableRefObject<MapView | null>> = { NG: viewNG, BR: viewBR, US: viewUS };
 
   // While closed, follow the home page's country and pick, so opening never has to switch maps.
   // (Adjusted during render, keyed on what it follows, rather than in an effect.)
@@ -224,7 +245,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
   } else if (followed !== followKey) {
     setFollowed(followKey);
     if (country !== startCountry) {
-      setSlideDir(COUNTRIES.indexOf(startCountry) > COUNTRIES.indexOf(country) ? 1 : -1);
+      setSlideDir(MAPS.indexOf(startCountry) > MAPS.indexOf(country) ? 1 : -1);
       setCountry(startCountry);
     }
     setPicked(startDistrict ? (data[startCountry]?.risk.districts.find((x) => x.district === startDistrict) ?? null) : null);
@@ -238,7 +259,9 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
   const chromeRef = useRef<HTMLDivElement>(null);
   const wasOpen = useRef(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const requestClose = () => onClose({ country, district: picked?.country === country ? picked.district : null });
+  // The test map is not a place the home page can show, so closing from it leaves the home page as it was.
+  const requestClose = () =>
+    onClose({ country: base, district: picked?.country === base ? picked.district : null });
   const latestClose = useRef(requestClose);
   useEffect(() => {
     latestClose.current = requestClose;
@@ -266,6 +289,21 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
     const unlockScroll = () => {
       document.documentElement.style.overflow = "";
       document.body.style.paddingRight = "";
+    };
+    // Once the map covers the window, the page behind it is hidden (not removed, so scroll position and layout
+    // stay put). Otherwise the browser keeps painting it under the map on every frame.
+    const hideBehind = () => {
+      for (const el of Array.from(document.body.children) as HTMLElement[]) {
+        if (el === root || el.tagName === "SCRIPT" || el.tagName.toLowerCase() === "nextjs-portal") continue;
+        el.dataset.mapHidden = el.style.visibility || "-";
+        el.style.visibility = "hidden";
+      }
+    };
+    const showBehind = () => {
+      for (const el of Array.from(document.body.querySelectorAll<HTMLElement>(":scope > [data-map-hidden]"))) {
+        el.style.visibility = el.dataset.mapHidden === "-" ? "" : (el.dataset.mapHidden ?? "");
+        delete el.dataset.mapHidden;
+      }
     };
 
     if (open && !wasOpen.current) {
@@ -295,8 +333,10 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
         chrome.style.transition = "opacity 260ms ease";
         chrome.style.opacity = "1";
       }, OPEN_MS - 140);
+      later(hideBehind, OPEN_MS + 60);
     } else if (!open && wasOpen.current) {
       wasOpen.current = false;
+      showBehind();
       root.style.pointerEvents = "none";
       chrome.style.transition = "opacity 140ms ease";
       chrome.style.opacity = "0";
@@ -321,6 +361,10 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
     () => () => {
       document.documentElement.style.overflow = "";
       document.body.style.paddingRight = "";
+      for (const el of Array.from(document.body.querySelectorAll<HTMLElement>(":scope > [data-map-hidden]"))) {
+        el.style.visibility = el.dataset.mapHidden === "-" ? "" : (el.dataset.mapHidden ?? "");
+        delete el.dataset.mapHidden;
+      }
     },
     [],
   );
@@ -364,21 +408,23 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
     >
       {/* The map is the whole page. Everything else floats on it. */}
       <SlideStage
-        keys={COUNTRIES}
+        keys={MAPS}
         current={country}
         dir={slideDir}
         render={(c) => {
-          const d = data[c];
+          const d = data[baseOf(c)];
           if (!d) return null;
           return (
             <RiskHeatMap
               districts={d.risk.districts}
-              detections={d.detections.country === c ? d.detections.detections : []}
+              detections={c === "US" ? usDots : d.detections.country === c ? d.detections.detections : []}
               selected={c === country ? selected?.district : undefined}
               onSelect={selectDistrict}
               onCitySelect={selectCity}
               onSwipe={step}
               viewRef={viewRefs[c]}
+              dotPalette={ORANGE_DOTS}
+              cityMarker="diamond"
               focus={c === country ? focus : resets[c] ? { key: resets[c]!, reset: true } : null}
             />
           );
@@ -397,7 +443,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
             ✕ Exit full screen
           </button>
           <h1 className="mt-1 text-5xl leading-none tracking-wide uppercase" style={DISPLAY}>
-            <span style={{ color: ORANGE }}>{city}</span> · {disease.replace("_", " ")} risk
+            <span style={{ color: ORANGE }}>{countryName}</span> · {disease.replace("_", " ")} risk
           </h1>
           {activeCity && (
             <button
@@ -410,7 +456,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
           )}
         </div>
         <div className="pointer-events-auto flex gap-2">
-          {COUNTRIES.map((c) => {
+          {MAPS.map((c) => {
             const active = country === c;
             return (
               <button
@@ -425,7 +471,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
                   color: active ? BG : `${INK}b3`,
                 }}
               >
-                {c === "NG" ? "Nigeria" : c === "BR" ? "Brazil" : "USA"}
+                {MAP_LABEL[c]}
               </button>
             );
           })}
@@ -466,7 +512,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
           <>
           {panelOpen ? (
             <section
-              className="pointer-events-auto max-w-[680px] rounded-sm border p-4 backdrop-blur-md"
+              className="pointer-events-auto flex max-h-[calc(100svh-9.5rem)] w-[360px] max-w-[calc(100vw-2rem)] flex-col rounded-sm border p-4 backdrop-blur-md"
               style={{ borderColor: `${INK}33`, backgroundColor: "rgba(19,17,15,0.88)" }}
             >
               <div className="flex items-start justify-between gap-4">
@@ -501,7 +547,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
                   </svg>
                 </button>
               </div>
-              <div className="mt-3 max-h-[46svh] overflow-y-auto" data-lenis-prevent>
+              <div className="mt-3 min-h-0 flex-1 overflow-y-auto" data-lenis-prevent>
                 <h3 className="text-lg tracking-wide uppercase" style={DISPLAY}>
                   Recommended actions
                 </h3>
@@ -533,7 +579,9 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
           className="pointer-events-none text-center text-[11px] uppercase tracking-widest opacity-80"
           style={{ ...TYPE, textShadow: "0 0 4px #000, 0 0 8px #000" }}
         >
-          1 dot = 1 mosquito detection, last {DOT_DAYS} days
+          {country === "US"
+            ? `1 dot = 1 simulated West Nile detection, last ${DOT_DAYS} days`
+            : `1 dot = 1 mosquito detection, last ${DOT_DAYS} days`}
         </p>
       </div>
 
@@ -568,7 +616,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
         <div className="mr-12 flex flex-col items-end gap-1">
           <span className="flex items-center gap-2">
             Center
-            <span className="inline-block h-2 w-24 rounded-sm" style={{ background: DOT_GRADIENT }} />
+            <span className="inline-block h-2 w-24 rounded-sm" style={{ background: paletteGradient(ORANGE_DOTS) }} />
             Outskirts
           </span>
           <span>More dots = higher risk</span>

@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import type { MutableRefObject } from "react";
 import type { City, MapFocus, MapView } from "@/lib/cities";
+import type { DotPalette } from "@/lib/dotColors";
 import type { Detection, DistrictRisk } from "@/lib/types";
 
 const RiskHeatMapClient = dynamic(() => import("./RiskHeatMapClient"), {
@@ -21,6 +22,10 @@ interface RiskHeatMapProps {
   focus?: MapFocus | null;
   /** Filled with a handle to read or jump the map's camera (see MapView). */
   viewRef?: MutableRefObject<MapView | null>;
+  /** Colors of the detection dots (default: red). */
+  dotPalette?: DotPalette;
+  /** Shape of the city markers (default: dot). */
+  cityMarker?: "dot" | "diamond";
   /** Map height in px (default: fill the parent). */
   height?: number | string;
 }

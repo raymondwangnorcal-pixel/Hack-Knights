@@ -6,7 +6,7 @@ import { Intro } from "@/components/Intro";
 import { ListenScreen } from "@/components/ListenScreen";
 import { PreventionScreen } from "@/components/PreventionScreen";
 import { scrollToId } from "@/components/SmoothScroll";
-import { SponsorSection, ToSponsorsArrow, scrollToSponsors } from "@/components/SponsorTracks";
+import { SponsorGate, ToSponsorsArrow, scrollToSponsors } from "@/components/SponsorTracks";
 
 // One full-screen landing page with two sides under the intro, switched by the header toggle.
 // "For you" is the live listening screen; "For prevention" (governments & nonprofits) is the live
@@ -109,7 +109,8 @@ function YouSide() {
 
 function PreventionSide() {
   // Governments and nonprofits: live risk map, health-team actions and the forecast (was /dashboard),
-  // then the sponsors section, reached by the "To sponsors" arrow at the bottom of the screen.
+  // then the sponsors section, which only appears when the "To sponsors" arrow (or the header's
+  // Sponsors tab) is pressed, so the page ends at the arrow until then.
   return (
     <main
       id="start"
@@ -120,7 +121,7 @@ function PreventionSide() {
         <PreventionScreen />
         <ToSponsorsArrow />
       </div>
-      <SponsorSection />
+      <SponsorGate />
     </main>
   );
 }

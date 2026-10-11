@@ -66,7 +66,6 @@ export interface Detection {
   confidence: number;
   source: "phone" | "trap";
   is_simulated: boolean;
-  opacity?: number; // 0..1, only for dots fading in or out on the Nigeria test map; absent means fully drawn
 }
 export interface DetectionsResponse {
   country: Country;

@@ -8,7 +8,6 @@ import { RISK_SCORE_BODY, RISK_SCORE_CITY_NOTE, RISK_SCORE_TITLE } from "@/lib/r
 import { ORANGE_DOTS, paletteGradient } from "@/lib/dotColors";
 import { CITIES, CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus, type MapView } from "@/lib/cities";
 import { loadUsTestDots } from "@/lib/usTestDots";
-import { makeSpread, type Spread } from "@/lib/spreadDots";
 import type {
   Country,
   Detection,
@@ -92,10 +91,6 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
   // Keyed by district so stale results never show for a newly selected district.
   const [planFor, setPlanFor] = useState<{ district: string; text: string } | null>(null);
   const [usDots, setUsDots] = useState<Detection[]>([]);
-  // The slider's week (-2 to +2, dragged continuously), and the current map's dots carried that far into the past or future.
-  const [week, setWeek] = useState(0); // weeks from now, -2 to +2, dragged continuously
-  const [future, setFuture] = useState<{ of: Spread; dots: Detection[] } | null>(null); // `of` guards against a stale map's dots
-  const shownWeek = useRef(0);
   const risk = data[base]?.risk ?? null;
   // Clicking a city that has data selects the whole city (Lagos, São Paulo, New York) as one summed-up area;
   // clicking a district inside it selects just that district. Nothing is selected until the first click.
@@ -136,28 +131,6 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
       alive = false;
     };
   }, []);
-
-  // The test map is the current Nigeria map's dots spread forward in time. The drawn week eases toward the slider
-  // so dragging (or clicking a label) glides; updates are throttled, since each one redraws the map.
-  const baseDots = country === "US" ? usDots : data[country]?.detections.detections;
-  const spread = useMemo(() => (baseDots?.length ? makeSpread(baseDots, country === "US" ? undefined : 0.15) : null), [baseDots, country]);
-  useEffect(() => {
-    if (!spread) return;
-    let raf = 0;
-    let pushed = -1e9;
-    const step = (now: number) => {
-      const diff = week - shownWeek.current;
-      shownWeek.current = Math.abs(diff) < 0.003 ? week : shownWeek.current + diff * 0.2;
-      const done = shownWeek.current === week;
-      if (done || now - pushed > 55) {
-        pushed = now;
-        setFuture({ of: spread, dots: spread.frame(shownWeek.current) });
-      }
-      if (!done) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [spread, week]);
 
   useEffect(() => {
     COUNTRIES.forEach((c) => {
@@ -287,7 +260,6 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
   const wasOpen = useRef(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   // The test map is not a place the home page can show, so closing from it leaves the home page as it was.
-// The test map is not a place the home page can show, so closing from it leaves the home page as it was.
   const requestClose = () =>
     onClose({ country: base, district: picked?.country === base ? picked.district : null });
   const latestClose = useRef(requestClose);
@@ -445,7 +417,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
           return (
             <RiskHeatMap
               districts={d.risk.districts}
-              detections={c === country && spread && future?.of === spread ? future.dots : c === "US" ? usDots : d.detections.country === c ? d.detections.detections : []}
+              detections={c === "US" ? usDots : d.detections.country === c ? d.detections.detections : []}
               selected={c === country ? selected?.district : undefined}
               onSelect={selectDistrict}
               onCitySelect={selectCity}
@@ -607,49 +579,11 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
           className="pointer-events-none text-center text-[11px] uppercase tracking-widest opacity-80"
           style={{ ...TYPE, textShadow: "0 0 4px #000, 0 0 8px #000" }}
         >
-<<<<<<< HEAD
-          {`1 dot = 1 ${country === "US" ? "simulated West Nile" : "mosquito"} detection, last ${DOT_DAYS} days${Math.abs(week) < 0.05 ? "" : `, ${week < 0 ? "earlier" : "projected"} ${week > 0 ? "+" : "−"}${Math.abs(week).toFixed(1)} weeks`}`}
-=======
           {country === "US"
             ? `1 dot = 1 West Nile detection, last ${DOT_DAYS} days`
             : `1 dot = 1 mosquito detection, last ${DOT_DAYS} days`}
->>>>>>> eea6c8a0e03b57c21bc5687e31f6014c72cf188c
         </p>
       </div>
-
-      {(
-        <div
-          className="pointer-events-auto absolute top-4 left-1/2 z-[1000] w-[min(380px,26vw)] min-w-[240px] -translate-x-1/2"
-          style={{ ...TYPE, textShadow: "0 0 4px #000, 0 0 8px #000" }}
-        >
-          <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-widest">
-            {(["−2 wk", "−1 wk", "Now", "+1 wk", "+2 wk"] as const).map((label, k) => {
-              const i = k - 2;
-              return (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setWeek(i)}
-                className="cursor-pointer py-1"
-                style={{ color: Math.abs(i - week) < 0.5 ? ORANGE : `${INK}99`, fontWeight: Math.abs(i - week) < 0.5 ? 700 : 400 }}
-              >
-                {label}
-              </button>
-              );
-            })}
-          </div>
-          <input
-            type="range"
-            min={-2}
-            max={2}
-            step={0.01}
-            value={week}
-            onChange={(e) => setWeek(Number(e.target.value))}
-            aria-label="Weeks from now"
-            className="h-1 w-full cursor-pointer accent-[#F07636]"
-          />
-        </div>
-      )}
 
       {/* Zoom buttons are page controls (not part of a map), so they stay put while maps slide. They send the
           same eased wheel zoom a mouse wheel does to the map in the middle of the screen. */}

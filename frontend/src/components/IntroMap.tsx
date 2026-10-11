@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import { COUNT_DELAY, COUNT_MS, DOTS_DELAY, DOTS_MS, easeOutSine, stage, useIntroWave } from "@/lib/introWave";
 import { MAP_COLS, MAP_ROWS } from "@/lib/worldDots";
 import { REGION_GRID, REGION_PATHS } from "@/lib/worldRegions";
 import {
@@ -78,10 +79,50 @@ const DEATH_BLEND = blendDots(
     (Object.keys(DEATH_FACTS) as RegionKey[]).map((k) => [k, BAND_REDS[DEATH_FACTS[k].band]]),
   ) as Record<RegionKey, string>,
 );
+// First-visit wave (lib/introWave.ts): after Enter, the dots appear in a ring spreading from the
+// click point, led by a band of bright dots on the wave front.
+//
+// For the wave, each map is painted once onto a canvas while the Enter screen is still up, and the
+// wave is a CSS radial mask moved over it. Drawing thousands of SVG dots for the first time as the
+// hole uncovered them caused visible hitches; a ready-made bitmap doesn't. The real SVG map (with
+// hover) swaps back in once all the intro motion has stopped.
+const ALL_LAND = Object.values(REGION_PATHS).join("");
+const WAVE_FRONT = 4.5; // width of the bright band, in dot cells
+const HIDDEN = "linear-gradient(transparent, transparent)";
+const WAVE_LAYER = {
+  aspectRatio: `${MAP_COLS} / ${MAP_ROWS}`,
+  maskImage: HIDDEN,
+  WebkitMaskImage: HIDDEN,
+  willChange: "transform",
+} as const;
+// Swap back to the SVG only after the counters have stopped spinning too, so the redraw is unseen.
+const SWAP_BACK_MS = Math.max(0, COUNT_DELAY + COUNT_MS - (DOTS_DELAY + DOTS_MS)) + 150;
+
+function setMask(el: HTMLElement, mask: string) {
+  el.style.maskImage = mask;
+  el.style.setProperty("-webkit-mask-image", mask);
+}
+
+/** Paint dot groups (as built by blendDots) onto a canvas at its displayed size. */
+function paintDots(canvas: HTMLCanvasElement, groups: { fill: string; d: string }[], alpha: number) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx || !canvas.clientWidth) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(canvas.clientWidth * dpr);
+  canvas.height = Math.round(canvas.clientHeight * dpr);
+  const u = canvas.width / MAP_COLS;
+  ctx.globalAlpha = alpha;
+  for (const g of groups) {
+    ctx.fillStyle = g.fill;
+    for (const m of g.d.matchAll(/M(\d+) (\d+)/g)) ctx.fillRect(Number(m[1]) * u, Number(m[2]) * u, 0.7 * u, 0.7 * u);
+  }
+}
+
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 
-export function IntroMap({
+// Memoised: the hero re-renders many times a second while its counters spin; the maps needn't.
+export const IntroMap = memo(function IntroMap({
   mode,
   accent,
   label,
@@ -92,6 +133,53 @@ export function IntroMap({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ region: RegionKey; x: number; y: number; w: number; h: number } | null>(null);
+
+  // Held empty under the Enter screen, then filled by the wave; plain map once it has passed.
+  const wave = useIntroWave();
+  const [waveDone, setWaveDone] = useState(false);
+  const waving = wave.status !== "none" && !waveDone;
+  const dots = useRef<HTMLCanvasElement>(null);
+  const front = useRef<HTMLCanvasElement>(null);
+  const highlight = mode === "infected" ? HIGHLIGHT : DEATH_HIGHLIGHT;
+  useEffect(() => {
+    if (!waving) return;
+    if (dots.current) paintDots(dots.current, mode === "infected" ? INFECTED_BLEND : DEATH_BLEND, mode === "infected" ? 0.92 : 1);
+    if (front.current) paintDots(front.current, [{ fill: highlight, d: ALL_LAND }], 1);
+  }, [waving, mode, highlight]);
+  useEffect(() => {
+    if (wave.status !== "entered") return;
+    const fill = dots.current;
+    const band = front.current;
+    const r = fill?.getBoundingClientRect();
+    if (!r || !fill || !band) return;
+    // Click point relative to this map, in px (it may lie off the map, e.g. between the two maps).
+    const cx = wave.x - r.left;
+    const cy = wave.y - r.top;
+    const bandPx = (WAVE_FRONT * r.width) / MAP_COLS;
+    const maxR =
+      Math.max(Math.hypot(cx, cy), Math.hypot(r.width - cx, cy), Math.hypot(cx, r.height - cy), Math.hypot(r.width - cx, r.height - cy)) +
+      bandPx;
+    const at = `circle at ${cx.toFixed(1)}px ${cy.toFixed(1)}px`;
+    let raf = 0;
+    let swap = 0;
+    const frame = (now: number) => {
+      const p = stage(wave, now, DOTS_DELAY, DOTS_MS);
+      const rad = easeOutSine(p) * maxR;
+      setMask(fill, `radial-gradient(${at}, #000 ${rad.toFixed(1)}px, transparent ${(rad + 1).toFixed(1)}px)`);
+      const a = p === 0 ? 0 : 1 - p * p; // the bright band fades as it travels
+      setMask(
+        band,
+        `radial-gradient(${at}, transparent ${(rad - bandPx).toFixed(1)}px, rgba(0,0,0,${a.toFixed(2)}) ${(rad - bandPx * 0.4).toFixed(1)}px, rgba(0,0,0,${a.toFixed(2)}) ${rad.toFixed(1)}px, transparent ${(rad + 1).toFixed(1)}px)`,
+      );
+      if (p < 1) raf = requestAnimationFrame(frame);
+      else swap = window.setTimeout(() => setWaveDone(true), SWAP_BACK_MS);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(swap);
+    };
+  }, [wave]);
 
   // Cursor → grid cell → region; a near-miss on the coast snaps to the closest land cell.
   function onMove(e: React.PointerEvent<HTMLDivElement>) {
@@ -126,7 +214,13 @@ export function IntroMap({
       onPointerDown={onMove}
       onPointerLeave={() => setHover(null)}
     >
-      <svg viewBox={`0 0 ${MAP_COLS} ${MAP_ROWS}`} className="block w-full" role="img" aria-label={label}>
+      <svg
+        viewBox={`0 0 ${MAP_COLS} ${MAP_ROWS}`}
+        className="block w-full"
+        role="img"
+        aria-label={label}
+        style={waving ? { visibility: "hidden" } : undefined}
+      >
         {/* Infected map: blended per-region oranges; the hovered region lights up on top */}
         {mode === "infected" && (
           <>
@@ -146,8 +240,15 @@ export function IntroMap({
             {hover && <path d={REGION_PATHS[hover.region]} fill={DEATH_HIGHLIGHT} />}
           </>
         )}
-
       </svg>
+
+      {/* During the intro wave: the map as a bitmap, and the wave front's band of bright dots */}
+      {waving && (
+        <>
+          <canvas ref={dots} aria-hidden="true" className="pointer-events-none absolute top-0 left-0 block w-full" style={WAVE_LAYER} />
+          <canvas ref={front} aria-hidden="true" className="pointer-events-none absolute top-0 left-0 block w-full" style={WAVE_LAYER} />
+        </>
+      )}
 
       {/* Label card, kept inside the map's width */}
       {hover && (
@@ -209,4 +310,4 @@ export function IntroMap({
       )}
     </div>
   );
-}
+});

@@ -4,7 +4,7 @@ import L from "leaflet";
 import countryShapes from "@/lib/countryShapes.json";
 import { CITIES, type City, type MapFocus, type MapView } from "@/lib/cities";
 import type { Country, Detection, DistrictRisk } from "@/lib/types";
-import { DOT_CORE, DOT_EDGE } from "@/lib/dotColors";
+import { RED_DOTS, type DotPalette } from "@/lib/dotColors";
 import { DISEASE_LABEL, GENUS_INFO } from "@/lib/species";
 import "leaflet/dist/leaflet.css";
 
@@ -17,6 +17,10 @@ interface RiskHeatMapClientProps {
   onSwipe?: (dir: 1 | -1) => void;
   focus?: MapFocus | null;
   viewRef?: MutableRefObject<MapView | null>;
+  /** Colors of the detection dots (default: red). */
+  dotPalette?: DotPalette;
+  /** Shape of the city markers: the default dot, or a diamond that can't be mistaken for a data dot. */
+  cityMarker?: "dot" | "diamond";
   height?: number | string;
 }
 
@@ -118,7 +122,7 @@ const LABEL_BASE = "position:absolute;left:0;top:0;margin:0;pointer-events:auto;
 const DISTRICT_LABEL_ZOOM = 9.5; // from here on, district labels replace city labels
 
 // Labels live in their own layer above the black mask and the dots, repositioned every frame.
-function CityLabels({ country, onSelect }: { country: Country; onSelect: (c: City) => void }) {
+function CityLabels({ country, onSelect, marker }: { country: Country; onSelect: (c: City) => void; marker: "dot" | "diamond" }) {
   const map = useMap();
   const onSelectRef = useRef(onSelect);
   useEffect(() => {
@@ -138,6 +142,10 @@ function CityLabels({ country, onSelect }: { country: Country; onSelect: (c: Cit
       el.style.cssText = LABEL_BASE;
       el.innerHTML = `<span class="city-dot"></span><span></span>`;
       el.lastElementChild!.textContent = c.name;
+      if (marker === "diamond") {
+        // A cream diamond with a dark edge: a different shape from the round data dots, so a city never reads as a detection.
+        (el.firstElementChild as HTMLElement).style.cssText = `width:10px;height:10px;flex:none;margin-right:4px;border-radius:0;transform:rotate(45deg);background:#ECE6DA;border:1.5px solid #13110F;box-shadow:0 0 0 1px ${c.hasData ? "#F07636" : "rgba(236,230,218,0.75)"};`;
+      }
       el.addEventListener("click", () => onSelectRef.current(c));
       layer.appendChild(el);
       return { c, el };
@@ -147,7 +155,7 @@ function CityLabels({ country, onSelect }: { country: Country; onSelect: (c: Cit
       layer.style.display = map.getZoom() >= DISTRICT_LABEL_ZOOM ? "none" : "";
       for (const { c, el } of items) {
         const p = map.latLngToContainerPoint([c.lat, c.lng]);
-        el.style.transform = `translate(${p.x - 4}px, ${p.y}px) translateY(-50%)`;
+        el.style.transform = `translate(${p.x - (marker === "diamond" ? 5 : 4)}px, ${p.y}px) translateY(-50%)`;
       }
     };
 
@@ -157,7 +165,7 @@ function CityLabels({ country, onSelect }: { country: Country; onSelect: (c: Cit
       map.off("move resize", place);
       layer.remove();
     };
-  }, [map, country]);
+  }, [map, country, marker]);
 
   return null;
 }
@@ -267,7 +275,7 @@ const DOT_MAX_RADIUS = 7;
 const DOT_GROWTH_PER_ZOOM = 1.2;
 
 // Dark red near the average position of a district's detections, fading to light red at its edge.
-function dotColors(detections: Detection[]): Map<string, string> {
+function dotColors(detections: Detection[], palette: DotPalette): Map<string, string> {
   const byDistrict = new Map<string, Detection[]>();
   for (const o of detections) {
     const list = byDistrict.get(o.district);
@@ -283,8 +291,8 @@ function dotColors(detections: Detection[]): Map<string, string> {
     const sorted = [...dist].sort((a, b) => a - b);
     const reach = sorted[Math.floor(sorted.length * 0.95)] || 1;
     group.forEach((o, i) => {
-      const t = Math.min(1, dist[i] / reach);
-      const [r, g, b] = DOT_CORE.map((c, k) => Math.round(c + (DOT_EDGE[k] - c) * t));
+      const t = Math.round(Math.min(1, dist[i] / reach) * 15) / 15; // 16 steps: few enough colours to draw each in one batch
+      const [r, g, b] = palette.core.map((c, k) => Math.round(c + (palette.edge[k] - c) * t));
       colors.set(o.detection_id, `rgb(${r} ${g} ${b})`);
     });
   }
@@ -431,10 +439,11 @@ function reliefTile(z: number, x: number, y: number, onLoad: () => void): HTMLCa
   img.crossOrigin = "anonymous"; // the tiles allow it; needed to read their pixels
   img.onload = () => {
     const c = document.createElement("canvas");
-    c.width = img.naturalWidth;
-    c.height = img.naturalHeight;
-    const cx = c.getContext("2d")!;
-    cx.drawImage(img, 0, 0);
+    // Half resolution: the shading is soft, and this makes the per-pixel conversion four times cheaper.
+    c.width = Math.max(1, img.naturalWidth >> 1);
+    c.height = Math.max(1, img.naturalHeight >> 1);
+    const cx = c.getContext("2d", { willReadFrequently: true })!;
+    cx.drawImage(img, 0, 0, c.width, c.height);
     const px = cx.getImageData(0, 0, c.width, c.height);
     for (let i = 0; i < px.data.length; i += 4) {
       const shadow = Math.min(1, Math.max(0, (255 - px.data[i]) / RELIEF_CONTRAST));
@@ -455,7 +464,6 @@ function reliefTile(z: number, x: number, y: number, onLoad: () => void): HTMLCa
 
 function drawRelief(
   ctx: CanvasRenderingContext2D,
-  outline: Path2D,
   zoom: number,
   scale: number,
   ox: number,
@@ -473,8 +481,8 @@ function drawRelief(
   const x1 = Math.min(n - 1, Math.floor((w - ox) / size));
   const y0 = Math.max(0, Math.floor(-oy / size));
   const y1 = Math.min(n - 1, Math.floor((h - oy) / size));
-  ctx.save();
-  ctx.clip(outline);
+  // The shading is transparent black, so it needs no clipping to the country: outside it, it lands on the
+  // black map background and is invisible. (Clipping to the outline on every frame was the costliest step.)
   ctx.globalAlpha = alpha;
   for (let x = x0; x <= x1; x++) {
     for (let y = y0; y <= y1; y++) {
@@ -483,7 +491,7 @@ function drawRelief(
       if (img) ctx.drawImage(img, x * size + ox, y * size + oy, size + 0.5, size + 0.5);
     }
   }
-  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 // ---- Clicking a dot: a small card with what the detection was (all from the detection row).
@@ -534,15 +542,54 @@ function fillHover(el: HTMLElement, o: Detection) {
   el.replaceChildren(title, sub);
 }
 
-function MapOverlay({ country, detections }: { country: Country; detections: Detection[] }) {
+// A filled dot drawn once into a small canvas; each frame then just stamps it, which is far cheaper than
+// building and filling a circle path for every dot.
+const spriteCache = new Map<string, HTMLCanvasElement>();
+function dotSprite(color: string, radius: number, dpr: number): HTMLCanvasElement {
+  const key = `${color}|${radius}|${dpr}`;
+  let c = spriteCache.get(key);
+  if (!c) {
+    const px = Math.ceil((radius * 2 + 2) * dpr);
+    c = document.createElement("canvas");
+    c.width = c.height = px;
+    const g = c.getContext("2d")!;
+    g.fillStyle = color;
+    g.beginPath();
+    g.arc(px / 2, px / 2, radius * dpr, 0, Math.PI * 2);
+    g.fill();
+    spriteCache.set(key, c);
+  }
+  return c;
+}
+
+function MapOverlay({ country, detections, palette }: { country: Country; detections: Detection[]; palette: DotPalette }) {
   const map = useMap();
   const fitZoom = useRef<number | null>(null);
 
   useEffect(() => {
     if (fitZoom.current === null) fitZoom.current = map.getZoom();
     const base = fitZoom.current;
-    const colors = dotColors(detections);
+    const colors = dotColors(detections, palette);
     const rings = countryRings(country);
+    // Dots are projected once (web-mercator, 0..1). A frame is then a scale and an offset per dot, and the dots
+    // are drawn one path and one fill per colour instead of one of each per dot.
+    const dotCount = detections.length;
+    const dotX = new Float64Array(dotCount);
+    const dotY = new Float64Array(dotCount);
+    const fallbackColor = `rgb(${palette.core.join(" ")})`;
+    const byColor = new Map<string, number[]>();
+    detections.forEach((o, i) => {
+      const lat = Math.max(-85.05, Math.min(85.05, o.lat));
+      dotX[i] = (o.lng + 180) / 360;
+      dotY[i] = 0.5 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / (2 * Math.PI);
+      const color = colors.get(o.detection_id) ?? fallbackColor;
+      const list = byColor.get(color);
+      if (list) list.push(i);
+      else byColor.set(color, [i]);
+    });
+    const redOf = (c: string) => Number(c.match(/\d+/)![0]);
+    const batches = [...byColor].sort((a, b) => Math.abs(redOf(a[0]) - palette.core[0]) - Math.abs(redOf(b[0]) - palette.core[0]));
+    let occupied = new Uint8Array(0);
     const radius = () =>
       Math.min(
         DOT_MAX_RADIUS,
@@ -567,17 +614,24 @@ function MapOverlay({ country, detections }: { country: Country; detections: Det
     L.DomEvent.disableClickPropagation(tip);
     L.DomEvent.disableScrollPropagation(tip);
     const hit = (pt: L.Point): Detection | null => {
-      let best: Detection | null = null;
+      const scale = 256 * 2 ** map.getZoom();
+      const origin = map.latLngToContainerPoint([0, 0]);
+      const ox = origin.x - scale / 2;
+      const oy = origin.y - scale / 2;
+      let best = -1;
       let bestDist = radius() + 5; // a little slack so small dots are easy to hit
-      for (const o of detections) {
-        const p = map.latLngToContainerPoint([o.lat, o.lng]);
-        const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      for (let i = 0; i < dotCount; i++) {
+        const dx = dotX[i] * scale + ox - pt.x;
+        if (dx > bestDist || dx < -bestDist) continue;
+        const dy = dotY[i] * scale + oy - pt.y;
+        if (dy > bestDist || dy < -bestDist) continue;
+        const d = Math.hypot(dx, dy);
         if (d <= bestDist) {
           bestDist = d;
-          best = o;
+          best = i;
         }
       }
-      return best;
+      return best < 0 ? null : detections[best];
     };
     const placeTip = () => {
       if (!picked) return;
@@ -686,7 +740,7 @@ function MapOverlay({ country, detections }: { country: Country; detections: Det
       ctx.fillStyle = COUNTRY_GRAY;
       ctx.fill(outline);
       ctx.globalAlpha = 1;
-      drawRelief(ctx, outline, zoom, scale, ox, oy, size.x, size.y, shape * (1 - 0.65 * Math.min(1, Math.max(0, (zoom - 7.5) / 2.5))), redraw);
+      drawRelief(ctx, zoom, scale, ox, oy, size.x, size.y, shape * (1 - 0.65 * Math.min(1, Math.max(0, (zoom - 7.5) / 2.5))), redraw);
       // States first (visible zoomed out), then districts as you zoom in; both thin out under the street tiles.
       const into = (zoom - base - ADM2_START) / (ADM2_FULL - ADM2_START);
       strokeLines(ctx, adm1, scale, ox, oy, size.x, size.y, ADM1_ALPHA * (0.5 + 0.5 * shape), 1);
@@ -697,12 +751,28 @@ function MapOverlay({ country, detections }: { country: Country; detections: Det
 
       const r = radius();
       ctx.globalAlpha = 0.9;
-      for (const o of detections) {
-        const p = map.latLngToContainerPoint([o.lat, o.lng]);
-        ctx.fillStyle = colors.get(o.detection_id) ?? "#c41e26";
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-        ctx.fill();
+      const spriteR = Math.round(r * 4) / 4; // sprites are cached per colour and quarter-pixel radius
+      const side = spriteR * 2 + 2; // sprite size in CSS px
+      const half = side / 2;
+      // Dots stacked within a fraction of a dot width look like one, so each tiny pixel cell gets a single dot.
+      // The darkest (most central) colours are drawn first, so they win the cell.
+      const cell = Math.max(1.5, r * 0.8);
+      const cols = Math.ceil(size.x / cell) + 2;
+      const rows = Math.ceil(size.y / cell) + 2;
+      if (occupied.length < cols * rows) occupied = new Uint8Array(cols * rows);
+      else occupied.fill(0, 0, cols * rows);
+      for (const [color, idx] of batches) {
+        const sprite = dotSprite(color, spriteR, dpr);
+        for (let k = 0; k < idx.length; k++) {
+          const i = idx[k];
+          const x = dotX[i] * scale + ox;
+          const y = dotY[i] * scale + oy;
+          if (x < -r || x > size.x + r || y < -r || y > size.y + r) continue; // off screen
+          const slot = ((y / cell) | 0) * cols + ((x / cell) | 0);
+          if (occupied[slot]) continue;
+          occupied[slot] = 1;
+          ctx.drawImage(sprite, x - half, y - half, side, side);
+        }
       }
       if (hovered && hovered !== picked) {
         const p = map.latLngToContainerPoint([hovered.lat, hovered.lng]);
@@ -741,7 +811,7 @@ function MapOverlay({ country, detections }: { country: Country; detections: Det
       tip.remove();
       canvas.remove();
     };
-  }, [map, detections, country]);
+  }, [map, detections, country, palette]);
 
   return null;
 }
@@ -878,6 +948,8 @@ export default function RiskHeatMapClient({
   onSwipe,
   focus,
   viewRef,
+  dotPalette = RED_DOTS,
+  cityMarker = "dot",
   height = "100%",
 }: RiskHeatMapClientProps) {
   const country = districts[0].country;
@@ -901,7 +973,7 @@ export default function RiskHeatMapClient({
     >
       <StreetTiles />
       <SmoothWheelZoom />
-      <CityLabels country={country} onSelect={onCitySelect} />
+      <CityLabels country={country} onSelect={onCitySelect} marker={cityMarker} />
       <FlyToFocus focus={focus} country={country} />
       <FitToCountry country={country} />
       {onSwipe && <SwipeToChange onSwipe={onSwipe} />}
@@ -941,7 +1013,7 @@ export default function RiskHeatMapClient({
         );
       })}
       <DistrictLabels districts={districts} selected={selected} onSelect={onSelect} />
-      <MapOverlay country={country} detections={detections} />
+      <MapOverlay country={country} detections={detections} palette={dotPalette} />
     </MapContainer>
     </div>
   );

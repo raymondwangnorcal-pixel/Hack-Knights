@@ -5,7 +5,7 @@ import RiskHeatMap from "@/components/RiskHeatMap";
 import { SLIDE_MS, SlideStage } from "@/components/SlideStage";
 import { InfoTip } from "@/components/InfoTip";
 import { RISK_SCORE_BODY, RISK_SCORE_CITY_NOTE, RISK_SCORE_TITLE } from "@/lib/riskHelp";
-import { DOT_GRADIENT } from "@/lib/dotColors";
+import { ORANGE_DOTS, paletteGradient } from "@/lib/dotColors";
 import { CITIES, CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus, type MapView } from "@/lib/cities";
 import type {
   Country,
@@ -26,8 +26,8 @@ const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" 
 // labels, forecast pill, zoom buttons, legend), as an overlay that grows out of the home page's map box.
 // It is a port of app/dashboard/page.tsx, which is kept as it was.
 
-// TEMPORARY: how many days of detections are drawn as dots (the numbers in the panel stay 7-day figures).
-const DOT_DAYS = 30;
+// How many days of detections are drawn as dots (7 matches the main app; the numbers in the panel are 7-day figures).
+const DOT_DAYS = 14;
 const OPEN_MS = 900;
 const CLOSE_MS = 700;
 const GROW = "cubic-bezier(0.45, 0, 0.12, 1)"; // eases in, then a long soft landing
@@ -267,6 +267,21 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
       document.documentElement.style.overflow = "";
       document.body.style.paddingRight = "";
     };
+    // Once the map covers the window, the page behind it is hidden (not removed, so scroll position and layout
+    // stay put). Otherwise the browser keeps painting it under the map on every frame.
+    const hideBehind = () => {
+      for (const el of Array.from(document.body.children) as HTMLElement[]) {
+        if (el === root || el.tagName === "SCRIPT" || el.tagName.toLowerCase() === "nextjs-portal") continue;
+        el.dataset.mapHidden = el.style.visibility || "-";
+        el.style.visibility = "hidden";
+      }
+    };
+    const showBehind = () => {
+      for (const el of Array.from(document.body.querySelectorAll<HTMLElement>(":scope > [data-map-hidden]"))) {
+        el.style.visibility = el.dataset.mapHidden === "-" ? "" : (el.dataset.mapHidden ?? "");
+        delete el.dataset.mapHidden;
+      }
+    };
 
     if (open && !wasOpen.current) {
       wasOpen.current = true;
@@ -295,8 +310,10 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
         chrome.style.transition = "opacity 260ms ease";
         chrome.style.opacity = "1";
       }, OPEN_MS - 140);
+      later(hideBehind, OPEN_MS + 60);
     } else if (!open && wasOpen.current) {
       wasOpen.current = false;
+      showBehind();
       root.style.pointerEvents = "none";
       chrome.style.transition = "opacity 140ms ease";
       chrome.style.opacity = "0";
@@ -321,6 +338,10 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
     () => () => {
       document.documentElement.style.overflow = "";
       document.body.style.paddingRight = "";
+      for (const el of Array.from(document.body.querySelectorAll<HTMLElement>(":scope > [data-map-hidden]"))) {
+        el.style.visibility = el.dataset.mapHidden === "-" ? "" : (el.dataset.mapHidden ?? "");
+        delete el.dataset.mapHidden;
+      }
     },
     [],
   );
@@ -379,6 +400,8 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
               onCitySelect={selectCity}
               onSwipe={step}
               viewRef={viewRefs[c]}
+              dotPalette={ORANGE_DOTS}
+              cityMarker="diamond"
               focus={c === country ? focus : resets[c] ? { key: resets[c]!, reset: true } : null}
             />
           );
@@ -466,7 +489,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
           <>
           {panelOpen ? (
             <section
-              className="pointer-events-auto max-w-[680px] rounded-sm border p-4 backdrop-blur-md"
+              className="pointer-events-auto flex max-h-[calc(100svh-9.5rem)] w-[360px] max-w-[calc(100vw-2rem)] flex-col rounded-sm border p-4 backdrop-blur-md"
               style={{ borderColor: `${INK}33`, backgroundColor: "rgba(19,17,15,0.88)" }}
             >
               <div className="flex items-start justify-between gap-4">
@@ -501,7 +524,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
                   </svg>
                 </button>
               </div>
-              <div className="mt-3 max-h-[46svh] overflow-y-auto" data-lenis-prevent>
+              <div className="mt-3 min-h-0 flex-1 overflow-y-auto" data-lenis-prevent>
                 <h3 className="text-lg tracking-wide uppercase" style={DISPLAY}>
                   Recommended actions
                 </h3>
@@ -568,7 +591,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
         <div className="mr-12 flex flex-col items-end gap-1">
           <span className="flex items-center gap-2">
             Center
-            <span className="inline-block h-2 w-24 rounded-sm" style={{ background: DOT_GRADIENT }} />
+            <span className="inline-block h-2 w-24 rounded-sm" style={{ background: paletteGradient(ORANGE_DOTS) }} />
             Outskirts
           </span>
           <span>More dots = higher risk</span>

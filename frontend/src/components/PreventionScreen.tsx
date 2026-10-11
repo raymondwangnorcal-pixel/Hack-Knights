@@ -6,6 +6,7 @@ import RiskHeatMap from "@/components/RiskHeatMap";
 import FullscreenMap, { type FullscreenResult } from "@/components/FullscreenMap";
 import { PreventionCard } from "@/components/PreventionCard";
 import { InfoTip } from "@/components/InfoTip";
+import { ORANGE_DOTS } from "@/lib/dotColors";
 import { DETECTIONS_BODY, DETECTIONS_TITLE, RISK_SCORE_BODY, RISK_SCORE_TITLE } from "@/lib/riskHelp";
 import { CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus, type MapView } from "@/lib/cities";
 import { readAutoSpeak, setAutoSpeak, speak as speakLine, subscribeAutoSpeak, unlockAudio } from "@/lib/voice";
@@ -37,8 +38,8 @@ const COUNTRIES: Country[] = ["NG", "BR", "US"];
 const CITY: Record<Country, string> = { NG: "Lagos", BR: "São Paulo", US: "New York" };
 const COUNTRY_NAME: Record<Country, string> = { NG: "Nigeria", BR: "Brazil", US: "USA" };
 const MAP_HEIGHT = 460;
-// TEMPORARY: how many days of detections are drawn as dots (the 7-day figures in the list are unchanged).
-const DOT_DAYS = 30;
+// How many days of detections are drawn as dots (7 matches the main app).
+const DOT_DAYS = 14;
 
 type Place = { country: Country; district: string };
 
@@ -291,6 +292,8 @@ export function PreventionScreen() {
                 onCitySelect={selectCity}
                 focus={focus}
                 viewRef={homeView}
+                dotPalette={ORANGE_DOTS}
+                cityMarker="diamond"
                 height={MAP_HEIGHT}
               />
             ) : (

@@ -186,7 +186,7 @@ export function withBuiltinTitles(actions: PreventionAction[], language: Languag
     const title = !a.registryUrl ? table?.[a.title] : undefined;
     if (!title) return { ...a, language: "en" as const };
     any = true;
-    return { ...a, title, language };
+    return { ...a, title, englishTitle: a.title, language };
   });
   return { actions: out, language: any ? language : "en" };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { scrollToId } from "@/components/SmoothScroll";
 
@@ -63,11 +63,38 @@ const SPONSORS: Sponsor[] = [
 
 const byId = (id: string) => SPONSORS.find((s) => s.id === id);
 
-/** Scroll to the sponsors section once it's on the page (it only renders on the prevention side,
- *  which may still be switching in when this is called). The map and lists above it are still
- *  loading and push it down, so it re-aims a few times as the page settles, unless the visitor
- *  starts scrolling themselves. */
-export function scrollToSponsors() {
+// ---- Opening the section ----
+// The sponsors section is not on the page until it is asked for (the "To sponsors" arrow, the
+// header's Sponsors tab, or a #sponsors / #<sponsor> link), so nobody can scroll past the arrow into
+// it. Once the visitor scrolls back up and it is fully out of view below, it closes again.
+const gate = { open: false, pickId: null as string | null, pickVersion: 0 };
+const gateListeners = new Set<() => void>();
+const notify = () => gateListeners.forEach((l) => l());
+const subscribeGate = (cb: () => void) => {
+  gateListeners.add(cb);
+  return () => {
+    gateListeners.delete(cb);
+  };
+};
+function setOpen(open: boolean) {
+  if (gate.open === open) return;
+  gate.open = open;
+  notify();
+}
+const useGateOpen = () => useSyncExternalStore(subscribeGate, () => gate.open, () => false);
+const useGatePick = () => useSyncExternalStore(subscribeGate, () => gate.pickVersion, () => 0);
+
+/** Open the sponsors section (optionally on one sponsor) and scroll to it once it's on the page
+ *  (it only renders on the prevention side, which may still be switching in when this is called).
+ *  The map and lists above it are still loading and push it down, so it re-aims a few times as the
+ *  page settles, unless the visitor starts scrolling themselves. */
+export function scrollToSponsors(sponsorId?: string) {
+  if (sponsorId && byId(sponsorId)) {
+    gate.pickId = sponsorId;
+    gate.pickVersion++;
+    notify();
+  }
+  setOpen(true);
   let tries = 0;
   let cancelled = false;
   const stop = () => {
@@ -102,7 +129,7 @@ export function ToSponsorsArrow() {
   return (
     <button
       type="button"
-      onClick={() => scrollToId(SPONSORS_ID)}
+      onClick={() => scrollToSponsors()}
       className="group mx-auto flex flex-col items-center gap-2 pt-2 pb-1"
       style={{ color: INK }}
     >
@@ -145,21 +172,49 @@ function ToPreventionArrow() {
   );
 }
 
-export function SponsorSection() {
-  const [id, setId] = useState(SPONSORS[0].id);
+/** Where the sponsors section goes on the page: nothing until it is opened, then the section. */
+export function SponsorGate() {
+  const open = useGateOpen();
+  const ref = useRef<HTMLDivElement>(null);
 
-  // Arriving from a link: #sponsors scrolls here; a sponsor's id also opens that sponsor.
+  // Arriving from a link: #sponsors opens and scrolls here; a sponsor's id also opens that sponsor.
   useEffect(() => {
     const fromHash = () => {
       const hash = window.location.hash.slice(1);
-      const s = byId(hash);
-      if (s) setId(s.id);
-      if (s || hash === SPONSORS_ID) scrollToSponsors();
+      if (byId(hash)) scrollToSponsors(hash);
+      else if (hash === SPONSORS_ID) scrollToSponsors();
     };
     fromHash();
     window.addEventListener("hashchange", fromHash);
     return () => window.removeEventListener("hashchange", fromHash);
   }, []);
+
+  // Close again once the visitor has seen it and scrolled back up past it (e.g. "Back to prevention").
+  useEffect(() => {
+    const el = ref.current;
+    if (!open || !el) return;
+    let seen = false;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) seen = true;
+      else if (seen && e.boundingClientRect.top > 0) setOpen(false);
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [open]);
+
+  return open ? (
+    <div ref={ref}>
+      <SponsorSection />
+    </div>
+  ) : null;
+}
+
+function SponsorSection() {
+  const pickVersion = useGatePick();
+  // The dropdown's choice, valid until a link picks a different sponsor.
+  const [choice, setChoice] = useState<{ id: string; pickVersion: number } | null>(null);
+  const id = choice && choice.pickVersion === pickVersion ? choice.id : (gate.pickId ?? SPONSORS[0].id);
+  const setId = (next: string) => setChoice({ id: next, pickVersion });
 
   const s = byId(id) ?? SPONSORS[0];
 

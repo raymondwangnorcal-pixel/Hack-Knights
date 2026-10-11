@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { RollingNumber } from "@/components/RollingNumber";
 import { useYearClock } from "@/lib/useYearClock";
 import { CASES_PER_SECOND, DISEASES, SECONDS_PER_DEATH, SECONDS_PER_YEAR } from "@/lib/burden";
@@ -308,7 +308,8 @@ const PHOTOS: Photo[] = [
   { src: "/intro/ventilated-man-full.jpg", alt: "A man on a ventilator in a hospital bed", ar: 1.499 },
 ];
 
-function Collage() {
+// Memoised so the spinning counters don't re-render the photo strip.
+const Collage = memo(function Collage() {
   return (
     <section aria-label="People affected by mosquito-borne disease" className="relative z-10 border-t border-[#ECE6DA]/20">
       <div
@@ -340,4 +341,4 @@ function Collage() {
       </div>
     </section>
   );
-}
+});

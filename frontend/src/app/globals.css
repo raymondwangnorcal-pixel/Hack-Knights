@@ -302,3 +302,18 @@ html:has(.hiw) {
   scrollbar-color: #1a1714 #e7ddc8;
   scrollbar-width: auto;
 }
+
+/* Home-page video intro (IntroVideo.tsx). Hidden unless the pre-paint script or React sets a phase. */
+.intro-video { display: none; transition: opacity 900ms ease; }
+.intro-video[data-phase="gate"],
+.intro-video[data-phase="playing"],
+.intro-video[data-phase="leaving"] { display: flex; }
+.intro-video[data-phase="leaving"] { opacity: 0; pointer-events: none; }
+.intro-video-film { object-fit: cover; opacity: 0; transition: opacity 400ms ease; }
+.intro-video:not([data-phase="gate"]) .intro-video-film { opacity: 1; }
+.intro-video-gate { transition: opacity 300ms ease; }
+.intro-video:not([data-phase="gate"]) .intro-video-gate { opacity: 0; pointer-events: none; }
+/* Forced (?intro=1) on a portrait screen: show the whole frame rather than a sliver of it. */
+@media (orientation: portrait) {
+  .intro-video-film { object-fit: contain; }
+}

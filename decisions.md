@@ -319,3 +319,4 @@ Verified locally: missing or unknown key → 401; bad country → 400; unknown d
 - **2026-10-10:** Water term made rainfall-dependent (desert correction); country-wide dots verified in a real browser for all three countries.
 - **2026-10-11:** Wide dots re-placed in clumps; dots cluster (about 10:1) when zoomed out and expand on zoom; red scale dimmed.
 - **2026-10-11:** "How it works" page with eight hand-drawn diagrams; keyed Model API (`/api/v1/*`) added.
+- **2026-10-11:** First-visit video intro on the home page (`IntroVideo.tsx`): tap-to-enter for sound, Skip/Esc, fades into the hero; skipped on phones and for reduce-motion; `?intro=1` forces it for the stage demo, `?intro=0` hides it.

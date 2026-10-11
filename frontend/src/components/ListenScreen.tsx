@@ -705,6 +705,8 @@ function ResultRow({
   const riskLevel = score == null ? null : score >= 67 ? 2 : score >= 34 ? 1 : 0;
   const riskColor = riskLevel === 2 ? RED : riskLevel === 1 ? ORANGE : TEAL;
   const dim = { opacity: 0.4 };
+  // Risk near you stays out of the page until a clip has been identified (recorded or Sample).
+  const showRisk = result !== null;
   const pitchOnly = heard?.model_version?.startsWith("pitch-rule") ?? false;
   const demoNote = !result?.is_simulated
     ? null
@@ -720,7 +722,10 @@ function ResultRow({
         <span>{demoNote}</span>
       </p>
     )}
-    <div className="grid grid-cols-2 gap-y-6 pt-6 lg:grid-cols-4 lg:divide-x lg:divide-[#ECE6DA]/20" style={COND}>
+    <div
+      className={`grid grid-cols-2 gap-y-6 pt-6 lg:divide-x lg:divide-[#ECE6DA]/20 ${showRisk ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
+      style={COND}
+    >
       {/* Species */}
       <div className="flex flex-col gap-1.5 pr-4 lg:pr-5">
         <Label>Species</Label>
@@ -777,6 +782,7 @@ function ResultRow({
       </div>
 
       {/* Risk near you */}
+      {showRisk && (
       <div className="flex flex-col gap-1.5 pr-4 lg:px-5">
         <Label>Risk near you</Label>
         <span className="text-[22px] leading-tight sm:text-[26px]" style={{ color: riskColor, opacity: riskLevel == null ? 0.4 : 1 }}>
@@ -802,9 +808,12 @@ function ResultRow({
           </span>
         )}
       </div>
+      )}
 
       {/* Can carry */}
-      <div className="flex flex-col gap-1.5 pl-4 lg:pl-5 max-lg:border-l max-lg:border-[#ECE6DA]/20">
+      <div
+        className={`flex flex-col gap-1.5 lg:pl-5 ${showRisk ? "pl-4 max-lg:border-l max-lg:border-[#ECE6DA]/20" : "pr-4"}`}
+      >
         <Label>Can carry</Label>
         {carry?.main ? (
           <>

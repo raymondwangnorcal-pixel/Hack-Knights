@@ -4,9 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Spectrogram } from "@/components/Spectrogram";
 import classifyMock from "@/mocks/classify.json";
 import { WakeGate, listMics, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
-import { stopSpeaking, toggleSpeak, unlockAudio, useSpeaking } from "@/lib/voice";
+import { stopSpeaking, toggleSpeak, unlockAudio, useVoiceState } from "@/lib/voice";
 import { LANGUAGES } from "@/lib/languages";
 import { pickSpoken } from "@/lib/spoken";
+import { SpinnerIcon } from "@/components/PreventionCard";
 import { DISEASE_LABEL, GENUS_INFO, carryInfo, listOr } from "@/lib/species";
 import type {
   ClassifyResponse,
@@ -382,7 +383,8 @@ export function ListenScreen() {
   const spokenTitles = useMemo(() => spoken?.titles ?? [], [spoken]);
   const canSpeak = voiced.includes(voice);
 
-  const speaking = useSpeaking();
+  const voiceState = useVoiceState();
+  const speaking = voiceState === "playing";
   // The play button: start, pause, or resume the spoken steps.
   function speak() {
     if (!shownPrevention || !spokenTitles.length) return;
@@ -600,11 +602,12 @@ export function ListenScreen() {
                 <button
                   onClick={speak}
                   disabled={!shownPrevention && !speaking}
-                  aria-label={speaking ? "Pause reading" : "Read the steps aloud"}
+                  aria-label={speaking ? "Pause reading" : voiceState === "loading" ? "Preparing audio" : "Read the steps aloud"}
                   aria-pressed={speaking}
+                  aria-busy={voiceState === "loading"}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-[#ECE6DA]/40 hover:border-[#ECE6DA] disabled:opacity-30"
                 >
-                  {speaking ? <PauseIcon size={13} /> : <PlayIcon size={13} />}
+                  {speaking ? <PauseIcon size={13} /> : voiceState === "loading" ? <SpinnerIcon size={14} /> : <PlayIcon size={13} />}
                 </button>
               </>
             )}

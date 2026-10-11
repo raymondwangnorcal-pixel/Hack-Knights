@@ -1,4 +1,4 @@
-# Buzz Check / Mozzy: build decisions
+# Culicid (formerly Buzz Check / Mozzy): build decisions
 
 A running record of what we decided while building the backend, ML pipeline and data layer, and **why**. Newest work is at the bottom of each section; the change log at the end is dated. Numbers quoted here were measured, not estimated, unless marked otherwise.
 
@@ -292,6 +292,18 @@ Decisions: one background `LISTEN` connection reconnects every 3 s on failure an
 
 **Operational notes.** Open-Meteo's elevation endpoint counts every coordinate as a request: the first grid build burned the hourly limit and stopped, so elevation moved to OpenTopoData and elevation and climate samples are cached in `data/density/cache/`. Water term scaled by rainfall (Phoenix scored 72 before, 63 after) because dry riverbeds don't breed mosquitoes. A stale-connection bug (Tiger closes idle connections; the pool reused a dead one and `/health` returned a 500) was fixed with a connection check in `backend/app/db.py`. The `/density` endpoint and `density_cells` table remain (the table feeds the seeding); no frontend uses `/density`.
 
+## 15. "How it works" page and the Model API (2026-10-11)
+
+| Decision | Why |
+| --- | --- |
+| New standalone page `/how-it-works` (`frontend/src/app/how-it-works/page.tsx`), not yet linked from the landing header. | Shows judges the engineering behind the demo; kept separate so it can be linked once reviewed. |
+| Eight hand-drawn diagrams (system, data, audio pipeline, training, forecast, Tiger live path, Snowflake REST, map dots), drawn with rough.js in the site's poster palette (`frontend/src/components/build/`). Every number is taken from this file. | Excalidraw-style sketches as asked, but in Mozzy's dark palette and fonts (Bebas Neue, IBM Plex Mono, Roboto Condensed) plus a handwriting font for the diagrams. Shapes are seeded from their geometry, so server and browser draw the same wobble. |
+| Each diagram draws itself in the first time it scrolls into view, only when it starts below the fold and reduced motion is off. | One-time flourish. Screenshots, reloads halfway down the page, and reduced motion all show the finished drawing. |
+| Simulated data is drawn red and dashed, and labelled in the text. | Same honesty rule as the dashboard. |
+| **Model API** at `/api/v1` (index), `/api/v1/identify` (POST clip), `/api/v1/risk?country=`, `/api/v1/forecast?district=`. Each organisation sends its key as `Authorization: Bearer` (or `x-api-key`); one key ships in `frontend/src/lib/apiKeys.ts` and more come from `MOZZY_API_KEYS="Org=key,..."`. Limit: 60 requests a minute per key (in memory, per instance). CORS is open. | Lets organisations call the same model and data. Unlike the public screens, there is **no sample-data fallback**: errors pass through with their status (401, 400, 422, 429, 503, 504). Identify stores a real detection with `device='api'`. |
+
+Verified locally: missing or unknown key → 401; bad country → 400; unknown district → 422; risk and forecast return live Tiger data with rate-limit headers. `POST /identify` was **not** run end to end, because it writes a real row to Tiger.
+
 ## Change log
 - **2026-10-09/10:** Tiger schema and districts loaded; `/classify` service with mock phone; Snowflake set up over REST; dengue history and weather loaded; dengue forecast trained, back-tested and published to Tiger.
 - **2026-10-10:** Audio features and genus/species classifier trained; HumBug detector tried and rejected; tonality gate adopted; new pipeline wired into `/classify`; demo clips exported. This document started.
@@ -306,3 +318,7 @@ Decisions: one background `LISTEN` connection reconnects every 3 s on failure an
 - **2026-10-10:** Frontend from `main` run locally against our backend; connection-pool fix; country-wide geography grid built; ~37,000 simulated detections scattered across BR, NG, US by that grid, dots coloured by local density.
 - **2026-10-10:** Water term made rainfall-dependent (desert correction); country-wide dots verified in a real browser for all three countries.
 - **2026-10-11:** Wide dots re-placed in clumps; dots cluster (about 10:1) when zoomed out and expand on zoom; red scale dimmed.
+- **2026-10-11:** "How it works" page with eight hand-drawn diagrams; keyed Model API (`/api/v1/*`) added.
+- **2026-10-11:** First-visit video intro on the home page (`IntroVideo.tsx`): tap-to-enter for sound, Skip/Esc, fades into the hero; skipped on phones and for reduce-motion; `?intro=1` forces it for the stage demo, `?intro=0` hides it.
+- **2026-10-11:** Renamed Mozzy → Culicid in everything visible (titles, wordmarks, pages, docs, `/api/v1` `api` field). Internal identifiers kept so nothing breaks: `MOZZY_API_KEYS` env var, `X-Mozzy-*` headers, `mozzy-*` localStorage/cache keys.
+- **2026-10-11:** Video intro replaced by a first-visit Enter screen (`IntroGate.tsx`, phones included): Enter plays a synthesised mosquito fly-by, sends sound-wave rings out, then a wobbling hole opens from the button; the map dots ripple in behind it from the click point and the counters spin up from 0 (`lib/introWave.ts`). Video files removed; `?intro=1` / `?intro=0` still force / hide it.

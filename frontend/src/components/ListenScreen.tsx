@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Spectrogram } from "@/components/Spectrogram";
 import classifyMock from "@/mocks/classify.json";
 import { WakeGate, listMics, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
-import { readAutoSpeak, setAutoSpeak, speak as speakLine, stopSpeaking, subscribeAutoSpeak, unlockAudio } from "@/lib/voice";
+import { stopSpeaking, toggleSpeak, unlockAudio, useVoiceState } from "@/lib/voice";
 import { LANGUAGES } from "@/lib/languages";
+import { tr } from "@/lib/localize";
 import { pickSpoken } from "@/lib/spoken";
+import { SpinnerIcon } from "@/components/PreventionCard";
 import { DISEASE_LABEL, GENUS_INFO, carryInfo, listOr } from "@/lib/species";
 import type {
   ClassifyResponse,
@@ -101,7 +103,6 @@ function makeAnalyser(ctx: BaseAudioContext, loud = false): AnalyserNode {
 
 export function ListenScreen() {
   const [risk, setRisk] = useState<Record<Country, DistrictRisk[]>>({ NG: [], BR: [], US: [] });
-  const [riskSimulated, setRiskSimulated] = useState(false);
   const [chosen, setChosen] = useState<Place | null>(null);
   const savedRaw = useSyncExternalStore(noSubscribe, readPlaceRaw, () => null);
   const [stage, setStage] = useState<Stage>("idle");
@@ -127,8 +128,6 @@ export function ListenScreen() {
   const startedAt = useRef(0);
   const run = useRef(0); // bumps on every start/stop so stale async work drops its result
   const replay = useRef<HTMLAudioElement | null>(null);
-  const spokenFor = useRef<string | null>(null); // detection already read aloud
-  const autoSpeak = useSyncExternalStore(subscribeAutoSpeak, readAutoSpeak, () => true);
 
   // District list + risk for both cities (the picker needs both).
   useEffect(() => {
@@ -137,7 +136,6 @@ export function ListenScreen() {
         .then((r) => r.json())
         .then((d: RiskResponse) => {
           setRisk((prev) => ({ ...prev, [c]: d.districts }));
-          if (d.is_simulated) setRiskSimulated(true);
         })
         .catch(() => {}),
     );
@@ -202,7 +200,7 @@ export function ListenScreen() {
       data = (await res.json()) as ClassifyResponse;
     } catch {
       const mock = (classifyMock as Record<Country, ClassifyResponse>)[place.country];
-      data = { ...mock, detection_id: `offline-${Date.now()}`, is_simulated: true, fallback_reason: "Couldn't reach Mozzy's server" };
+      data = { ...mock, detection_id: `offline-${Date.now()}`, is_simulated: true, fallback_reason: "Couldn't reach Culicid's server" };
     }
     if (id !== run.current) throw new Error("stale");
     return data;
@@ -380,26 +378,20 @@ export function ListenScreen() {
 
   const shownPrevention = prevention?.key === preventionKey ? prevention.data : null;
 
-  // Titles in the chosen language are read in its voice; untranslated ones in the English voice.
+  // Only titles in the chosen language are read, in its own voice; never English in its place.
   const spoken = useMemo(() => (shownPrevention ? pickSpoken(shownPrevention, language) : null), [shownPrevention, language]);
   const voice = spoken?.voice ?? language;
   const spokenTitles = useMemo(() => spoken?.titles ?? [], [spoken]);
-  const canSpeak = voiced.includes(voice);
+  const canSpeak = voiced.includes(voice) && (!spoken || spokenTitles.length > 0);
 
-  // Read the result aloud once per detection, as soon as its prevention actions are in.
-  useEffect(() => {
-    if (!autoSpeak || !canSpeak || !shownPrevention || !result?.is_mosquito || !spokenTitles.length) return;
-    if (spokenFor.current === result.detection_id) return;
-    spokenFor.current = result.detection_id;
-    speakLine(spokenLine(result, spokenTitles, voice), voice);
-  }, [autoSpeak, canSpeak, shownPrevention, result, voice, spokenTitles]);
-
+  const voiceState = useVoiceState();
+  const speaking = voiceState === "playing";
+  // The play button: start, pause, or resume the spoken steps.
   function speak() {
     if (!shownPrevention || !spokenTitles.length) return;
-    unlockAudio();
     // With a result: species + actions; before one: just the district's actions.
     const text = result?.is_mosquito ? spokenLine(result, spokenTitles, voice) : spokenTitles.join(voice === "zh" ? "。" : ". ");
-    speakLine(text, voice);
+    toggleSpeak(text, voice);
   }
 
   const district = risk[place.country].find((d) => d.district === place.district) ?? null;
@@ -593,7 +585,7 @@ export function ListenScreen() {
         </div>
 
         {/* Result row */}
-        <ResultRow result={result} district={district} city={CITY[place.country]} riskSimulated={riskSimulated} />
+        <ResultRow result={result} district={district} city={CITY[place.country]} />
       </section>
 
       {/* ---------- Prevention card ---------- */}
@@ -609,23 +601,14 @@ export function ListenScreen() {
             {canSpeak && (
               <>
                 <button
-                  onClick={() => setAutoSpeak(!autoSpeak)}
-                  aria-pressed={autoSpeak}
-                  aria-label={autoSpeak ? "Auto-speak on: tap to mute" : "Auto-speak off: tap to turn on"}
-                  title={autoSpeak ? "Results are read aloud. Tap to mute." : "Muted. Tap to read results aloud."}
-                  className="flex h-9 items-center gap-2 rounded-full border border-[#ECE6DA]/30 px-3 text-[14px] hover:border-[#ECE6DA]"
-                  style={COND}
-                >
-                  {autoSpeak ? <SpeakerIcon /> : <SpeakerOffIcon />}
-                  <span className="max-sm:hidden">{autoSpeak ? "Auto" : "Muted"}</span>
-                </button>
-                <button
                   onClick={speak}
-                  disabled={!shownPrevention}
-                  aria-label="Read the steps aloud"
+                  disabled={!shownPrevention && !speaking}
+                  aria-label={speaking ? "Pause reading" : voiceState === "loading" ? "Preparing audio" : "Read the steps aloud"}
+                  aria-pressed={speaking}
+                  aria-busy={voiceState === "loading"}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-[#ECE6DA]/40 hover:border-[#ECE6DA] disabled:opacity-30"
                 >
-                  <PlayIcon size={13} />
+                  {speaking ? <PauseIcon size={13} /> : voiceState === "loading" ? <SpinnerIcon size={14} /> : <PlayIcon size={13} />}
                 </button>
               </>
             )}
@@ -650,7 +633,7 @@ export function ListenScreen() {
 
         <p className="border-b border-[#ECE6DA]/20 py-3 text-[14px] leading-snug opacity-70" style={COND} aria-label="Mosquito evidence">
           {shownPrevention
-            ? `${shownPrevention.context}${shownPrevention.basis === "general" ? " · General guidance" : ""}`
+            ? `${shownPrevention.context}${shownPrevention.basis === "general" ? ` · ${tr(language, "c.general")}` : ""}`
             : "Checking local mosquito data…"}
         </p>
 
@@ -671,8 +654,8 @@ export function ListenScreen() {
                   </summary>
                   <p className="mt-3 max-w-prose text-[16px] leading-snug opacity-75" style={COND}>{item.reason}</p>
                   <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm underline underline-offset-2" style={COND}>
-                    <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Why this action ↗</a>
-                    {item.registryUrl && <a href={item.registryUrl} target="_blank" rel="noopener noreferrer">Check registration and label ↗</a>}
+                    <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">{tr(language, "u.why")}</a>
+                    {item.registryUrl && <a href={item.registryUrl} target="_blank" rel="noopener noreferrer">{tr(language, "u.registry")}</a>}
                   </div>
                 </details>
               ) : (
@@ -686,8 +669,8 @@ export function ListenScreen() {
         <p className="mt-auto pt-6 text-[15px] opacity-70" style={COND}>
           {!shownPrevention
             ? "Preparing advice for your district."
-            : `${shownPrevention.source === "gemini" ? "By Gemini" : "From Mozzy guidance"}${
-                spoken && !spoken.translated ? " · Translation unavailable, showing English" : ""
+            : `By Gemini${
+                spoken && !spoken.translated ? ` · ${tr(language, "u.noTranslation")}` : ""
               }`}
         </p>
       </section>
@@ -746,12 +729,10 @@ function ResultRow({
   result,
   district,
   city,
-  riskSimulated,
 }: {
   result: ClassifyResponse | null;
   district: DistrictRisk | null;
   city: string;
-  riskSimulated: boolean;
 }) {
   const heard = result?.is_mosquito ? result : null;
   const carry = heard ? carryInfo(heard.species, heard.genus, heard.diseases) : null;
@@ -861,7 +842,7 @@ function ResultRow({
         {district && (
           <span className="mt-1 text-[13px] leading-snug opacity-75">
             {district.district}, {city}: {district.cases_14d.toLocaleString()} {DISEASE_LABEL[district.main_disease].toLowerCase()} cases
-            in 14 days, {district.detections_7d} detections in 7 days{riskSimulated ? " (simulated)" : ""}
+            in 14 days, {district.detections_7d} detections in 7 days
           </span>
         )}
       </div>
@@ -950,21 +931,4 @@ function WaveIcon() {
 }
 function RecIcon() {
   return <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: RED }} aria-hidden="true" />;
-}
-function SpeakerOffIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
-      <path d="M17 9.5l5 5M22 9.5l-5 5" />
-    </svg>
-  );
-}
-
-function SpeakerIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
-      <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />
-    </svg>
-  );
 }

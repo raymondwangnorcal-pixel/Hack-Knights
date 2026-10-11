@@ -15,8 +15,8 @@ const geistSans = GeistSans;
 const geistMono = GeistMono;
 
 export const metadata: Metadata = {
-  title: "Mozzy",
-  description: "Mozzy: Shazam for mosquitoes. Identify disease-carrying species by their buzz.",
+  title: "Culicid",
+  description: "Culicid: Shazam for mosquitoes. Identify disease-carrying species by their buzz.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

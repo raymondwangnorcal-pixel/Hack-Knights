@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import RiskHeatMap from "@/components/RiskHeatMap";
 import FullscreenMap, { type FullscreenResult } from "@/components/FullscreenMap";
@@ -9,8 +9,8 @@ import { InfoTip } from "@/components/InfoTip";
 import { ORANGE_DOTS } from "@/lib/dotColors";
 import { DETECTIONS_BODY, DETECTIONS_TITLE, RISK_SCORE_BODY, RISK_SCORE_TITLE } from "@/lib/riskHelp";
 import { CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus, type MapView } from "@/lib/cities";
-import { readAutoSpeak, setAutoSpeak, speak as speakLine, subscribeAutoSpeak, unlockAudio } from "@/lib/voice";
-import { pickSpoken } from "@/lib/spoken";
+import { toggleSpeak } from "@/lib/voice";
+import { pickSpokenFull } from "@/lib/spoken";
 import type {
   Country,
   DetectionsResponse,
@@ -43,6 +43,8 @@ const DOT_DAYS = 7;
 
 type Place = { country: Country; district: string };
 
+/** Start delay for one piece of the page's fill-in animation (see .pv in globals.css). */
+const pvDelay = (ms: number) => ({ "--pv-d": `${ms}ms` }) as React.CSSProperties;
 const byRank = (ds: DistrictRisk[]) => [...ds].sort((a, b) => a.rank - b.rank);
 
 function fetchRisk(c: Country): Promise<RiskResponse | null> {
@@ -64,9 +66,6 @@ export function PreventionScreen() {
   // Keyed by place and language so a stale plan never shows after a switch.
   const [plan, setPlan] = useState<{ key: string; data: PreventionResponse } | null>(null);
   const [planRefresh, setPlanRefresh] = useState(0);
-  const autoSpeak = useSyncExternalStore(subscribeAutoSpeak, readAutoSpeak, () => true);
-  const picked = useRef(false); // the viewer has chosen a district, so a plan may be read aloud
-  const spokenFor = useRef<string | null>(null);
   const focusKey = useRef(0); // each map move request gets a new key, so FlyToFocus fires once
   // Full screen: the overlay grows out of the map box, and the two maps hand their camera to each other.
   const mapBoxRef = useRef<HTMLDivElement>(null);
@@ -160,32 +159,19 @@ export function PreventionScreen() {
   }, [place.country, place.district, language, planKey]);
 
   const shownPlan = plan?.key === planKey ? plan.data : null;
-  // Titles in the chosen language are read in its voice; untranslated ones in the English voice.
-  const spoken = useMemo(() => (shownPlan ? pickSpoken(shownPlan, language) : null), [shownPlan, language]);
+  // Only actions in the chosen language are read, in its own voice; never English in its place.
+  // The play button reads the whole plan (titles and reasons); nothing plays until it is pressed.
+  const spoken = useMemo(() => (shownPlan ? pickSpokenFull(shownPlan, language) : null), [shownPlan, language]);
   const voice = spoken?.voice ?? language;
-  const spokenTitles = useMemo(() => spoken?.titles ?? [], [spoken]);
-  const canSpeak = voiced.includes(voice);
-  const sep = voice === "zh" || voice === "yue" ? "。" : ". ";
-  const spokenText = (titles: string[]) => `${place.district}${sep}${titles.map((t) => t.replace(/[.。!！]+$/, "")).join(sep)}`;
-
-  // Read a plan aloud once per district and language, only after the viewer picked a district.
-  useEffect(() => {
-    if (!picked.current || !autoSpeak || !canSpeak || !shownPlan || !spokenTitles.length) return;
-    const id = `${place.country}:${place.district}:${language}`;
-    if (spokenFor.current === id) return;
-    spokenFor.current = id;
-    speakLine(`${place.district}${sep}${spokenTitles.map((t) => t.replace(/[.。!！]+$/, "")).join(sep)}`, voice);
-  }, [autoSpeak, canSpeak, shownPlan, spokenTitles, place.country, place.district, language, voice, sep]);
+  const canSpeak = voiced.includes(voice) && (!spoken || spoken.lines.length > 0);
 
   function speak() {
-    if (!shownPlan || !spokenTitles.length) return;
-    unlockAudio();
-    speakLine(spokenText(spokenTitles), voice);
+    if (!spoken?.lines.length) return;
+    const stop = voice === "zh" || voice === "yue" ? "。" : ". ";
+    toggleSpeak(`${place.district}${stop}${spoken.lines.join(" ")}`, voice);
   }
 
   function selectDistrict(next: Place, zoom = true) {
-    unlockAudio(); // inside the tap, so the plan can speak when it arrives
-    picked.current = true;
     setChosen(next);
     setCityNote(null);
     const d = risk[next.country]?.districts.find((x) => x.district === next.district);
@@ -225,7 +211,7 @@ export function PreventionScreen() {
     <div className="flex flex-1 flex-col gap-3">
       <div className="grid flex-1 gap-3 lg:grid-cols-[minmax(0,1.62fr)_minmax(0,1fr)]">
         {/* ---------- Map card ---------- */}
-        <section aria-label="Live risk map" className="flex min-w-0 flex-col border border-[#ECE6DA]/20 px-4 pt-4 pb-5 sm:px-7 sm:pt-6">
+        <section aria-label="Live risk map" data-pv="up" className="flex min-w-0 flex-col border border-[#ECE6DA]/20 px-4 pt-4 pb-5 sm:px-7 sm:pt-6">
           {/* Header: state · place · country tabs */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[#ECE6DA]/20 pb-4 sm:pb-5">
             <span className="flex items-center gap-2.5 text-[22px] leading-none tracking-[0.18em] uppercase sm:text-[26px]" style={{ ...DISPLAY, color: ORANGE }}>
@@ -282,7 +268,7 @@ export function PreventionScreen() {
 
           {/* Map */}
           {/* isolate: keeps the map's own layers (z-index up to 1000) below the sticky page header. */}
-          <div ref={mapBoxRef} className="relative isolate mt-5">
+          <div ref={mapBoxRef} data-pv="reveal" style={pvDelay(150)} className="relative isolate mt-5">
             {countryRisk ? (
               <RiskHeatMap
                 districts={countryRisk.districts}
@@ -331,7 +317,7 @@ export function PreventionScreen() {
           </div>
 
           {/* Ranked districts */}
-          <div className="mt-5 border-t border-[#ECE6DA]/20 pt-4">
+          <div className="mt-5 border-t border-[#ECE6DA]/20 pt-4" data-pv="up" style={pvDelay(450)}>
             <span className="text-[11px] tracking-[0.18em] uppercase opacity-55" style={MONO}>
               Districts by risk · {CITY[country]}
             </span>
@@ -367,10 +353,10 @@ export function PreventionScreen() {
               </div>
             )}
             <ol className="grid gap-x-6 sm:grid-cols-2">
-              {districts.map((d) => {
+              {districts.map((d, i) => {
                 const active = d.district === place.district;
                 return (
-                  <li key={d.district}>
+                  <li key={d.district} data-pv="up" style={pvDelay(550 + i * 35)}>
                     <button
                       onClick={() => selectDistrict({ country, district: d.district })}
                       aria-current={active ? "true" : undefined}
@@ -384,7 +370,11 @@ export function PreventionScreen() {
                         {d.district}
                       </span>
                       <span className="hidden h-1 w-14 flex-none bg-[#ECE6DA]/15 sm:block" aria-hidden="true">
-                        <span className="block h-full" style={{ width: `${d.risk_score}%`, backgroundColor: d.risk_score >= 70 ? RED : ORANGE }} />
+                        <span
+                          className="block h-full"
+                          data-pv="bar"
+                          style={{ ...pvDelay(750 + i * 35), width: `${d.risk_score}%`, backgroundColor: d.risk_score >= 70 ? RED : ORANGE }}
+                        />
                       </span>
                       <span className="w-[76px] flex-none text-right text-[13px] tabular-nums" style={MONO}>
                         {d.risk_score}
@@ -402,13 +392,13 @@ export function PreventionScreen() {
 
         {/* ---------- Prevention card ---------- */}
         <PreventionCard
+          title="Action plan"
           data={shownPlan}
           language={language}
           onLanguage={setLanguage}
           canSpeak={canSpeak}
-          autoSpeak={autoSpeak}
-          onAutoSpeak={setAutoSpeak}
           onSpeak={speak}
+          expanded
           contextPrefix={place.district}
           loadingContext="Checking the district's numbers…"
           loadingFooter="Preparing a plan for this district."

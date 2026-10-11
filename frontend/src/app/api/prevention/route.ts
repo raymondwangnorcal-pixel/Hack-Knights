@@ -1,9 +1,10 @@
 import { USE_MOCKS, mockForecast, mockRisk } from "@/lib/mockData";
 import { districtsById, getDetections, getForecast, getRisk } from "@/lib/backend";
 import { gatherPreventionContext, householdCandidates, preventionContextLine, type PreventionContext } from "@/lib/prevention";
-import { healthTeamCandidates, healthTeamContextLine, type HealthTeamContext } from "@/lib/healthTeam";
+import { healthTeamCandidates, healthTeamContextLine, healthTeamStats, type HealthTeamContext } from "@/lib/healthTeam";
 import { buildHealthTeamPrompt } from "@/lib/healthTeamPrompt";
-import { withBuiltinTitles } from "@/lib/actionTranslations";
+import { localizeAction } from "@/lib/localize";
+import { allowedNumbers, applyGeminiPlan, writingRules } from "@/lib/geminiPlan";
 import { parseLanguage, promptName } from "@/lib/languages";
 import type {
   Country, Detection, DetectionsResponse, ForecastResponse, Genus, Language, PreventionAction, PreventionRequest,
@@ -92,13 +93,15 @@ async function chooseWithGemini(candidates: ReturnType<typeof householdCandidate
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
         contents: [{ parts: [{ text: [
-          "Choose exactly three action IDs for a household mosquito prevention panel, in priority order.",
-          "The first two candidate IDs are mandatory; choose one of the remaining two as the third.",
+          `You write the household mosquito prevention panel for residents of ${ctx.district}.`,
+          "Choose exactly three action IDs, in priority order.",
+          "The first two candidate IDs are mandatory; choose the better fit of the remaining two as the third.",
           `Context: ${JSON.stringify({ ...ctx, rainMm: ctx.rainMm === null ? null : Math.round(ctx.rainMm) })}. The context describes regional signals, not confirmed features of a user's property.`,
-          `For each selected action, translate its title and reason into ${promptName(language)} without adding facts, products, doses, or instructions.`,
-          "Keep Bti wording conditional and retain its registration and label warning. Do not add genus names to action titles or reasons; they appear only in the separate context line. No prose outside JSON.",
+          "Write for a resident: warm, plain and specific to this district.",
+          ...writingRules(promptName(language), language === "en"),
+          "Keep Bti wording conditional and retain its registration and label warning. Do not name mosquito genera in titles or reasons; they appear only in the separate context line.",
           `Candidates: ${JSON.stringify(candidates.map(({ id, title, reason }) => ({ id, title, reason })))}`,
-          'Return JSON as {"ids":["id1","id2","id3"],"translations":[{"id":"id1","title":"...","reason":"..."},...]}',
+          'Return JSON as {"ids":["id1","id2","id3"],"actions":[{"id":"id1","title":"...","reason":"..."},...]}',
         ].join("\n") }] }],
         generationConfig: { responseMimeType: "application/json", temperature: 0.1, thinkingConfig: { thinkingLevel: "low" } },
       }),
@@ -113,26 +116,17 @@ async function chooseWithGemini(candidates: ReturnType<typeof householdCandidate
     }
     const data = await res.json();
     const raw = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("");
-    const generated = JSON.parse(raw);
-    const ids = generated?.ids;
-    if (!Array.isArray(ids) || ids.length !== 3 || new Set(ids).size !== 3 ||
-        ids[0] !== candidates[0].id || ids[1] !== candidates[1].id ||
-        !candidates.slice(2).some((a) => a.id === ids[2])) {
-      console.error("prevention: Gemini picked invalid ids", JSON.stringify(ids), candidates.map((c) => c.id).join(","));
+    const actions = applyGeminiPlan(JSON.parse(raw), candidates, {
+      language,
+      validIds: (ids) => ids[0] === candidates[0].id && ids[1] === candidates[1].id && candidates.slice(2).some((a) => a.id === ids[2]),
+      allowed: allowedNumbers(ctx, candidates),
+      forbid: /\b(aedes|anopheles|culex)\b/i,
+    });
+    if (!actions) {
+      console.error("prevention: Gemini picked invalid ids", raw.slice(0, 300), candidates.map((c) => c.id).join(","));
       return null;
     }
-    const chosen = ids.map((id: string) => candidates.find((a) => a.id === id)!);
-    if (language === "en") return remember(chosen);
-    const translations = generated?.translations;
-    if (!Array.isArray(translations) || translations.length !== 3) return null;
-    return remember(chosen.map((original, i) => {
-      const t = translations[i];
-      if (t?.id !== original.id || typeof t.title !== "string" || typeof t.reason !== "string" ||
-          t.title.length > 100 || t.reason.length > 500 || !t.title.trim() || !t.reason.trim() ||
-          /\b(aedes|anopheles|culex)\b/i.test(`${t.title} ${t.reason}`)) throw new Error("Invalid translation");
-      // Chemical text stays curated until country-specific translations have been reviewed.
-      return original.id === "bti-option" ? { ...original, language: "en" as const } : { ...original, title: t.title.trim(), reason: t.reason.trim() };
-    }));
+    return remember(actions);
   } catch (err) {
     console.error("prevention: Gemini call failed", String(err));
     return null;
@@ -182,35 +176,7 @@ async function loadForecast(district: string): Promise<ForecastResponse | null> 
   }
 }
 
-const numbersIn = (text: string): string[] => text.match(/\d+/g) ?? [];
-
-/** Checks Gemini's reply against the contract in healthTeamPrompt.ts; null when it doesn't fit. */
-function validateHealthTeamReply(generated: unknown, candidates: PreventionAction[], language: Language): PreventionAction[] | null {
-  const reply = generated as { ids?: unknown; translations?: unknown } | null;
-  const ids = reply?.ids;
-  if (!Array.isArray(ids) || ids.length !== 3 || new Set(ids).size !== 3 ||
-      !ids.includes(candidates[0].id) || !ids.every((id) => candidates.some((a) => a.id === id))) {
-    console.error("prevention (health team): Gemini picked invalid ids", JSON.stringify(ids), candidates.map((c) => c.id).join(","));
-    return null;
-  }
-  const chosen = (ids as string[]).map((id) => candidates.find((a) => a.id === id)!);
-  if (language === "en") return chosen;
-  const translations = reply?.translations;
-  if (!Array.isArray(translations) || translations.length !== 3) return null;
-  return chosen.map((original, i) => {
-    const t = translations[i];
-    if (t?.id !== original.id || typeof t.title !== "string" || typeof t.reason !== "string" ||
-        !t.title.trim() || !t.reason.trim() || t.title.length > 120 || t.reason.length > 700 ||
-        // Every number in the grounded reason must survive translation unchanged.
-        !numbersIn(original.reason).every((n) => numbersIn(t.reason).includes(n))) {
-      throw new Error("Invalid translation");
-    }
-    // Chemical text stays curated until country-specific translations have been reviewed.
-    return original.registryUrl ? { ...original, language: "en" as const } : { ...original, title: t.title.trim(), reason: t.reason.trim() };
-  });
-}
-
-async function chooseHealthTeamWithGemini(candidates: PreventionAction[], ctx: HealthTeamContext, language: Language) {
+async function chooseHealthTeamWithGemini(candidates: ReturnType<typeof healthTeamCandidates>, ctx: HealthTeamContext, language: Language) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
   const cacheKey = JSON.stringify({ audience: "health_team", ...ctx, rainMm: ctx.rainMm === null ? null : Math.round(ctx.rainMm), language });
@@ -224,7 +190,7 @@ async function chooseHealthTeamWithGemini(candidates: PreventionAction[], ctx: H
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: buildHealthTeamPrompt(candidates, ctx, promptName(language)) }] }],
+        contents: [{ parts: [{ text: buildHealthTeamPrompt(candidates, ctx, promptName(language), language === "en") }] }],
         generationConfig: { responseMimeType: "application/json", temperature: 0.1, thinkingConfig: { thinkingLevel: "low" } },
       }),
       signal: AbortSignal.timeout(20000),
@@ -238,8 +204,15 @@ async function chooseHealthTeamWithGemini(candidates: PreventionAction[], ctx: H
     }
     const data = await res.json();
     const raw = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("");
-    const actions = validateHealthTeamReply(JSON.parse(raw), candidates, language);
-    if (!actions) return null;
+    const actions = applyGeminiPlan(JSON.parse(raw), candidates, {
+      language,
+      validIds: (ids) => ids.includes(candidates[0].id),
+      allowed: allowedNumbers({ ...ctx, rainMm: ctx.rainMm === null ? null : Math.round(ctx.rainMm) }, candidates),
+    });
+    if (!actions) {
+      console.error("prevention (health team): Gemini picked invalid ids", raw.slice(0, 300), candidates.map((c) => c.id).join(","));
+      return null;
+    }
     if (geminiCache.size >= 128) geminiCache.delete(geminiCache.keys().next().value!);
     geminiCache.set(cacheKey, { expiresAt: Date.now() + 10 * 60_000, actions });
     return actions;
@@ -284,14 +257,15 @@ async function healthTeamPlan(body: PreventionRequest): Promise<Response> {
   const candidates = healthTeamCandidates(ctx);
   const language = parseLanguage(body.language);
   const chosen = await chooseHealthTeamWithGemini(candidates, ctx, language);
-  // Without Gemini, titles still come back translated from the built-in table.
-  const fallback = chosen ? null : withBuiltinTitles(candidates.slice(0, 3), language);
+  // Without Gemini (free-tier quota, no key, a bad reply), the rules' top three come back fully
+  // translated from the built-in tables.
   const response: PreventionResponse = {
-    actions: chosen ?? fallback!.actions,
+    actions: chosen ?? candidates.slice(0, 3).map((a) => localizeAction(a, language)),
     source: chosen ? "gemini" : "rules",
     basis: "local",
-    context: healthTeamContextLine(ctx),
-    language: chosen ? language : fallback!.language,
+    context: healthTeamContextLine(ctx, language),
+    stats: healthTeamStats(ctx, language),
+    language,
     is_simulated: ctx.simulated,
   };
   return Response.json(response);
@@ -321,14 +295,14 @@ export async function POST(request: Request) {
   const candidates = householdCandidates(ctx);
   const requestedLanguage = parseLanguage(body.language);
   const chosen = await chooseWithGemini(candidates, ctx, requestedLanguage);
-  // Without Gemini, titles still come back translated from the built-in table.
-  const fallback = chosen ? null : withBuiltinTitles(candidates.slice(0, 3), requestedLanguage);
+  // Without Gemini (free-tier quota, no key, a bad reply), the rules' top three come back fully
+  // translated from the built-in tables.
   const response: PreventionResponse = {
-    actions: chosen ?? fallback!.actions,
+    actions: chosen ?? candidates.slice(0, 3).map((a) => localizeAction(a, requestedLanguage)),
     source: chosen ? "gemini" : "rules",
     basis: ctx.recordingGenus || ctx.regionalGenus ? "local" : "general",
-    context: preventionContextLine(ctx),
-    language: chosen ? requestedLanguage : fallback!.language,
+    context: preventionContextLine(ctx, requestedLanguage),
+    language: requestedLanguage,
   };
   return Response.json(response);
 }

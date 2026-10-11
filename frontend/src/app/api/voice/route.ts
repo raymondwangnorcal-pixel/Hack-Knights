@@ -7,12 +7,18 @@ import type { Language, VoiceLanguagesResponse, VoiceRequest } from "@/lib/types
 //   GET  /api/voice?lang=ha&text=...    -> audio/mpeg, cacheable (CDN + browser), used by the screen
 //   POST /api/voice { text, language }  -> audio/mpeg, uncached (kept for other callers)
 //
-// A language is spoken only when it has its own voice ID, e.g. ELEVENLABS_VOICE_EN. Yoruba and
-// Cantonese have no ElevenLabs model, so they stay unset and text-only (see docs/decisions.md).
+// A language is spoken only when it has its own voice ID, e.g. ELEVENLABS_VOICE_EN. Yoruba has no
+// ElevenLabs model, so it stays text-only (see docs/decisions.md DEC-0037).
 
-const MAX_CHARS = 600; // a spoken result is ~200 characters; this caps any one request's credit cost
+const MAX_CHARS = 1500; // a full action plan with reasons is ~900 characters; this caps any one request's credit cost
+
+// No ElevenLabs model lists Yoruba, and only eleven_v4 lists Cantonese, so a voice ID alone is not
+// enough for these: they stay text-only unless ELEVENLABS_MODEL_<LANG> is set on purpose too.
+// Otherwise the default multilingual model reads the text with English pronunciation.
+const NEEDS_EXPLICIT_MODEL: Language[] = ["yo", "yue"];
 
 function voiceFor(language: Language) {
+  if (NEEDS_EXPLICIT_MODEL.includes(language) && !process.env[`ELEVENLABS_MODEL_${language.toUpperCase()}`]) return undefined;
   return process.env[`ELEVENLABS_VOICE_${language.toUpperCase()}`];
 }
 

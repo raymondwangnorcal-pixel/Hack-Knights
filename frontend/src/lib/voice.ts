@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import type { Language } from "./types";
 
 // Plays spoken lines from /api/voice on the phone.
@@ -14,10 +15,79 @@ const SILENT =
 
 let player: HTMLAudioElement | null = null;
 let currentUrl: string | null = null;
+let currentKey: string | null = null; // language + text of the line in the player
+let loadingKey: string | null = null; // a line whose audio is still being fetched (a long plan takes seconds)
+
+// Whether a spoken line is playing right now (the silent unlock clip doesn't count), so play
+// buttons can show a pause icon while it speaks.
+const playingListeners = new Set<() => void>();
+const notifyPlaying = () => playingListeners.forEach((l) => l());
 
 function getPlayer(): HTMLAudioElement {
-  if (!player) player = new Audio();
+  if (!player) {
+    player = new Audio();
+    for (const ev of ["play", "playing", "pause", "ended", "emptied"]) player.addEventListener(ev, notifyPlaying);
+  }
   return player;
+}
+
+export function isSpeaking(): boolean {
+  return !!player && !player.paused && !player.ended && player.src !== SILENT;
+}
+
+export type VoiceState = "idle" | "loading" | "playing";
+const voiceState = (): VoiceState => (isSpeaking() ? "playing" : loadingKey ? "loading" : "idle");
+
+/** "loading" while a line's audio is fetched, "playing" while it speaks, otherwise "idle". */
+export function useVoiceState(): VoiceState {
+  return useSyncExternalStore(
+    (cb) => {
+      playingListeners.add(cb);
+      return () => playingListeners.delete(cb);
+    },
+    voiceState,
+    () => "idle",
+  );
+}
+
+/** True while a spoken line is playing; re-renders when it starts, pauses or ends. */
+export function useSpeaking(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      playingListeners.add(cb);
+      return () => playingListeners.delete(cb);
+    },
+    isSpeaking,
+    () => false,
+  );
+}
+
+/** The play button: pauses a line that is playing, resumes this line where it was paused, or starts it. */
+export async function toggleSpeak(text: string, language: Language): Promise<boolean> {
+  const p = getPlayer();
+  if (isSpeaking()) {
+    p.pause();
+    return true;
+  }
+  if (currentKey === `${language}|${text}` && currentUrl && p.src === currentUrl && !p.ended && p.currentTime > 0) {
+    try {
+      await p.play();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const key = `${language}|${text}`;
+  if (loadingKey === key) return true; // already fetching this line: a second tap shouldn't fetch it twice
+  unlockAudio(); // inside the tap, so the line can play once it has loaded
+  loadingKey = key;
+  notifyPlaying();
+  try {
+    return await speak(text, language);
+  } finally {
+    if (loadingKey === key) loadingKey = null;
+    notifyPlaying();
+  }
 }
 
 /** Call inside a tap handler. Makes later play() calls on this page allowed on iOS and Android. */
@@ -59,6 +129,7 @@ export async function speak(text: string, language: Language): Promise<boolean> 
   if (currentUrl) URL.revokeObjectURL(currentUrl);
   currentUrl = URL.createObjectURL(blob);
   p.src = currentUrl;
+  currentKey = `${language}|${text}`;
   try {
     await p.play();
     return true;

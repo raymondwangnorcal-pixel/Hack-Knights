@@ -607,7 +607,13 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
           className="pointer-events-none text-center text-[11px] uppercase tracking-widest opacity-80"
           style={{ ...TYPE, textShadow: "0 0 4px #000, 0 0 8px #000" }}
         >
+<<<<<<< HEAD
           {`1 dot = 1 ${country === "US" ? "simulated West Nile" : "mosquito"} detection, last ${DOT_DAYS} days${Math.abs(week) < 0.05 ? "" : `, ${week < 0 ? "earlier" : "projected"} ${week > 0 ? "+" : "−"}${Math.abs(week).toFixed(1)} weeks`}`}
+=======
+          {country === "US"
+            ? `1 dot = 1 West Nile detection, last ${DOT_DAYS} days`
+            : `1 dot = 1 mosquito detection, last ${DOT_DAYS} days`}
+>>>>>>> eea6c8a0e03b57c21bc5687e31f6014c72cf188c
         </p>
       </div>
 

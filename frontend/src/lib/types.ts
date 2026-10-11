@@ -1,4 +1,4 @@
-// Shared API contract for Mozzy.
+// Shared API contract for Culicid.
 // The Data/ML service and these Next.js routes must return exactly these shapes.
 // See frontend/API_CONTRACT.md for the human-readable version.
 
@@ -143,6 +143,8 @@ export interface PreventionAction {
   sourceUrl: string;
   registryUrl?: string;
   language?: Language;
+  /** Set when `title` is a built-in translation and `reason` stayed in English. */
+  englishTitle?: string;
 }
 
 export interface PreventionResponse {
@@ -150,6 +152,8 @@ export interface PreventionResponse {
   source: "gemini" | "rules";
   basis: "local" | "general";
   context: string;
+  /** health_team only: the numbers behind the plan, one labeled cell each. */
+  stats?: { label: string; value: string }[];
   language: Language;
   /** health_team only: true when any input behind the plan is simulated demo data. */
   is_simulated?: boolean;

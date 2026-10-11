@@ -72,7 +72,7 @@
 - Owner: user
 - Status at record: active
 - Decision: The landing page opens with a full-screen two-column burden display showing estimated mosquito-related infections since January 1 on the left and deaths since January 1 on the right, then collapses both figures into a persistent top banner after the user scrolls past it.
-- Rationale: Visitors must understand the scale of the problem before encountering Mozzy's product explanation or calls to action.
+- Rationale: Visitors must understand the scale of the problem before encountering Culicid's product explanation or calls to action.
 - Scope: Landing-page information hierarchy, desktop and mobile burden presentation, scroll transition, and sticky navigation behavior.
 - Implementation: pending
 - Recorded against HEAD: `15298b0fee4a4f34686ec083e44d16a90d3f0a86`
@@ -114,7 +114,7 @@
 - Owner: user
 - Status at record: active
 - Decision: The centered control that swaps landing-page audience paths uses a mechanical two-stop field-instrument switch rather than an editorial index, rounded segmented control, or circular dial.
-- Rationale: A tactile instrument metaphor supports Mozzy's sound-detection function and gives the interaction a more distinctive identity.
+- Rationale: A tactile instrument metaphor supports Culicid's sound-detection function and gives the interaction a more distinctive identity.
 - Scope: Landing-page audience control styling, labels, active-state motion, focus states, and responsive treatment.
 - Implementation: pending
 - Recorded against HEAD: `15298b0fee4a4f34686ec083e44d16a90d3f0a86`
@@ -142,7 +142,7 @@
 - Owner: user
 - Status at record: active
 - Decision: When the landing-page switch is set to the citizen path, the first full-width module is the functional listening instrument with a live waveform, location control, primary capture action, and sample-buzz fallback.
-- Rationale: Showing the working interaction before explanatory content proves Mozzy is an actionable tool rather than only a concept.
+- Rationale: Showing the working interaction before explanatory content proves Culicid is an actionable tool rather than only a concept.
 - Scope: Citizen landing-path hierarchy, listening module, sample-demo entry, and placement of explanatory steps.
 - Implementation: pending
 - Recorded against HEAD: `15298b0fee4a4f34686ec083e44d16a90d3f0a86`
@@ -381,7 +381,7 @@
 - Date: 2026-10-10
 - Owner: user
 - Status at record: active
-- Decision: Once the home-screen burden display scrolls away, the sticky header retains the Mozzy wordmark on the left and replaces everything to its right with compact infection and death statistics.
+- Decision: Once the home-screen burden display scrolls away, the sticky header retains the Culicid wordmark on the left and replaces everything to its right with compact infection and death statistics.
 - Rationale: The burden remains continuously visible while the main canvas transitions from problem scale to product utility.
 - Scope: Landing-page scroll transition, sticky header layout, compact counter presentation, navigation replacement, and responsive behavior.
 - Implementation: pending
@@ -409,7 +409,7 @@
 - Date: 2026-10-10
 - Owner: user
 - Status at record: active
-- Decision: The citizen sound monitor uses a Merlin Bird ID-inspired interaction model with a live spectrogram, playhead, elapsed time, play or pause control, recording control, save action, and location-aware identification while retaining Mozzy's own dark visual identity.
+- Decision: The citizen sound monitor uses a Merlin Bird ID-inspired interaction model with a live spectrogram, playhead, elapsed time, play or pause control, recording control, save action, and location-aware identification while retaining Culicid's own dark visual identity.
 - Rationale: A spectrogram-centered workflow communicates live acoustic analysis more clearly than a decorative waveform and provides a familiar recording hierarchy.
 - Scope: Citizen listening interface, recording controls, audio visualization, session metadata, location prompt, and identification state.
 - Implementation: pending
@@ -541,4 +541,16 @@
 - Implementation: elevenlabs-voice branch, rebased onto the household prevention panel (DEC-0029)
 - Supersedes: none (refines DEC-0002)
 - Evidence: https://elevenlabs.io/docs/help-center/other/what-languages-do-you-support ; session conversation of 2026-10-10.
+- Privacy waivers: none
+
+## DEC-0037 — Prevention cards are fully translated; no English voice fallback
+
+- Date: 2026-10-11
+- Owner: user
+- Status at record: active
+- Decision: Every string on both Prevention cards (For you and For prevention) has a built-in translation in all seven non-English languages: action titles and reasons, chemical (Bti/larvicide) actions, the evidence row and the card links. When Gemini is unavailable, or one of its answers fails a check, that action falls back to the built-in translation, not English. Speech reads only text in the chosen language, in that language's voice. The English voice is never swapped in, so Yoruba is translated text with no play button. The voice route also refuses Yoruba and Cantonese unless ELEVENLABS_MODEL_<LANG> is set on purpose.
+- Rationale: The Gemini key is on the free tier, so quota errors left reasons in English and Yoruba entirely in English, and the English voice then read that English. The user chose to translate the chemical actions too (keeping the registry link and label warning) and to keep Yoruba text-only, because no ElevenLabs model (v2, v3 or v4) lists Yoruba. Cantonese stays text-only by choice, even though eleven_v4 now supports it.
+- Scope: frontend/src/lib/localize.ts, frontend/src/lib/i18n/*.json, prevention.ts, healthTeam.ts, geminiPlan.ts, spoken.ts, /api/prevention, /api/voice, ListenScreen, PreventionCard, PreventionScreen.
+- Supersedes: the English-voice fallback in DEC-0036 and the curated-English rule for chemical actions
+- Evidence: https://elevenlabs.io/docs/help-center/other/what-languages-do-you-support ; https://elevenlabs.io/docs/overview/capabilities/text-to-speech/eleven-v4 ; session conversation of 2026-10-11.
 - Privacy waivers: none

@@ -25,7 +25,7 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-/* Mozzy themes, after vercel.com: consumer side light, government/nonprofit side dark. */
+/* Culicid themes, after vercel.com: consumer side light, government/nonprofit side dark. */
 .theme-light {
   --background: #ffffff;
   --foreground: #0a0a0a;
@@ -270,4 +270,80 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .sponsor-fade { animation: none; }
+}
+
+/* For prevention: the page fills in each time the side opens (Landing adds .pv-play once it is on
+   screen). Each piece marks itself with data-pv="up|right|reveal|bar" and a --pv-d delay; before
+   play they hold their first frame (hidden), and after the run (.pv-done) they go static so later
+   updates (a new district, a new plan) don't animate. */
+@keyframes pv-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes pv-right { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: none; } }
+@keyframes pv-reveal { from { clip-path: circle(0% at 50% 55%); } to { clip-path: circle(100% at 50% 55%); } }
+@keyframes pv-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.pv [data-pv] {
+  animation-duration: 600ms;
+  animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation-fill-mode: both;
+  animation-delay: var(--pv-d, 0ms);
+  animation-play-state: paused;
+}
+.pv.pv-play [data-pv] { animation-play-state: running; }
+.pv [data-pv="up"] { animation-name: pv-up; }
+.pv [data-pv="right"] { animation-name: pv-right; animation-duration: 700ms; }
+.pv [data-pv="reveal"] { animation-name: pv-reveal; animation-duration: 1100ms; animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1); }
+.pv [data-pv="bar"] { animation-name: pv-bar; transform-origin: left center; }
+.pv.pv-done [data-pv] { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pv [data-pv] { animation: none; }
+}
+
+/* How it works: hand-drawn diagrams draw themselves in the first time they scroll into view.
+   SketchFrame only adds .sk-armed when the diagram starts below the fold and motion is allowed. */
+.sk-armed .sk-stroke {
+  stroke-dasharray: 1 2;
+  stroke-dashoffset: 1;
+}
+.sk-armed .sk-text,
+.sk-armed .sk-fill,
+.sk-armed .sk-dash {
+  opacity: 0;
+}
+.sk-armed.sk-drawn .sk-stroke {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1100ms cubic-bezier(0.45, 0, 0.25, 1) var(--d, 0ms);
+}
+.sk-armed.sk-drawn .sk-fill,
+.sk-armed.sk-drawn .sk-dash {
+  opacity: 1;
+  transition: opacity 700ms ease var(--d, 0ms);
+}
+.sk-armed.sk-drawn .sk-text {
+  opacity: 1;
+  transition: opacity 700ms ease calc(var(--d, 0ms) + 450ms);
+}
+
+/* How it works: a dark, always-visible page scrollbar on the creme page. */
+html:has(.hiw) {
+  scrollbar-color: #1a1714 #e7ddc8;
+  scrollbar-width: auto;
+}
+
+/* First-visit Enter screen (IntroGate.tsx). Hidden unless the pre-paint script or React sets a phase. */
+.intro-gate { display: none; }
+.intro-gate[data-phase="gate"],
+.intro-gate[data-phase="revealing"] { display: block; }
+.intro-gate[data-phase="revealing"] { pointer-events: none; }
+/* While revealing, the canvas underneath is the cover (with the hole); the panel keeps only its text. */
+.intro-gate[data-phase="revealing"] .intro-gate-panel { background: none !important; }
+/* As the hole opens, the wordmark drifts back and fades. */
+.intro-gate-title { transition: transform 1300ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 500ms ease 450ms; }
+.intro-gate-enter { transition: transform 600ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 400ms ease 150ms; }
+.intro-gate[data-phase="revealing"] .intro-gate-title { transform: scale(1.06); opacity: 0; }
+.intro-gate[data-phase="revealing"] .intro-gate-enter { transform: scale(0.92); opacity: 0; }
+/* Sound-wave rings from the Enter button, once, when it's pressed. */
+.intro-gate-ring { opacity: 0; }
+.intro-gate[data-phase="revealing"] .intro-gate-ring { animation: intro-gate-ring 760ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+@keyframes intro-gate-ring {
+  0% { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(3.2, 5); opacity: 0; }
 }

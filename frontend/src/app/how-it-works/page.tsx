@@ -16,8 +16,7 @@ import {
 import { PUBLISHED_KEY, RATE_LIMIT_PER_MIN } from "@/lib/apiKeys";
 
 // "How it works": how Mozzy was built, one hand-drawn diagram per stage, from the data to the
-// Model API. Content comes from decisions.md. Standalone for now; link it from the landing header
-// when it's ready.
+// Model API. Content comes from decisions.md. Linked from the landing header's "How it works" tab.
 
 export const metadata: Metadata = {
   title: "How it works · Mozzy",

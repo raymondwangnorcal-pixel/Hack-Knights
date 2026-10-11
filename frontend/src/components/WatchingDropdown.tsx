@@ -234,7 +234,7 @@ function Wave({
           <BigNumber value={infected} color={ORANGE} duration={600} easing="cubic-bezier(0.2, 0.8, 0.2, 1)" />
         </NumberLine>
 
-        <p className="text-[12px] tracking-[0.24em] uppercase opacity-60 sm:text-[13px]" style={TYPE}>
+        <p className="tracking-[0.22em] uppercase opacity-70" style={{ ...TYPE, fontSize: "clamp(14px, 1.35vw, 19px)" }}>
           and claimed
         </p>
 

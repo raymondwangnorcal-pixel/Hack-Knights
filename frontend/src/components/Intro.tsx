@@ -8,6 +8,7 @@ import { CASES_PER_SECOND, DISEASES, SECONDS_PER_DEATH, SECONDS_PER_YEAR } from 
 import { IntroMap } from "@/components/IntroMap";
 import { GlowGrid } from "@/components/GlowGrid";
 import { BAR_SPACER, StickyBar } from "@/components/StickyBar";
+import { COUNT_DELAY, COUNT_MS, easeOutQuart, stage, useIntroWave, type IntroWave } from "@/lib/introWave";
 
 // Full-screen intro: a printed-poster take on the counters. Two live totals since Jan 1,
 // each over a dot-matrix world map shaded where mosquito-borne disease concentrates.
@@ -59,6 +60,33 @@ function useJitteredCount(annual: number): number | null {
   return shown;
 }
 
+// First-visit wave (lib/introWave.ts): under the Enter screen the big counters sit at 0; after Enter
+// they spin up to the live totals, reels whirring, then hand back to the normal live roll.
+const SPIN_ROLL = { duration: 160, easing: "linear" };
+
+function useRollUp(wave: IntroWave) {
+  const [now, setNow] = useState(0);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (wave.status !== "entered") return;
+    let id = 0;
+    const tick = () => {
+      const t = performance.now();
+      setNow(t);
+      if (stage(wave, t, COUNT_DELAY, COUNT_MS) < 1) id = window.setTimeout(tick, 50);
+      else setDone(true);
+    };
+    id = window.setTimeout(tick, 0);
+    return () => window.clearTimeout(id);
+  }, [wave]);
+  const counting = wave.status !== "none" && !done;
+  const k = wave.status === "entered" ? easeOutQuart(stage(wave, now, COUNT_DELAY, COUNT_MS)) : 0;
+  return {
+    counting,
+    show: (v: number | null) => (v === null || !counting ? v : Math.floor(v * k)),
+  };
+}
+
 export function Intro({
   onPick,
   onSponsors,
@@ -77,6 +105,7 @@ export function Intro({
   const infected = useJitteredCount(cases);
   const deaths = DISEASES.reduce((s, d) => s + d.deaths, 0);
   const deathFraction = clock === null ? undefined : ((clock.secs / SECONDS_PER_YEAR) * deaths) % 1;
+  const rollUp = useRollUp(useIntroWave());
 
   return (
     <section
@@ -106,8 +135,8 @@ export function Intro({
         <Panel
           accent={ORANGE}
           word="Infected"
-          value={infected}
-          roll={INFECTED_ROLL}
+          value={rollUp.show(infected)}
+          roll={rollUp.counting ? SPIN_ROLL : INFECTED_ROLL}
           rate={
             <>
               <Num color={ORANGE}>+{CASES_PER_SECOND.toFixed(1)}</Num> every second
@@ -117,10 +146,10 @@ export function Intro({
         <Panel
           accent={RED}
           word="Died"
-          value={perYear(deaths, clock)}
+          value={rollUp.show(perYear(deaths, clock))}
           // The last digit creeps through the whole ~45 s gap, so each death arrives as the end of a slow roll.
-          fraction={deathFraction}
-          roll={DEATH_ROLL}
+          fraction={rollUp.counting ? undefined : deathFraction}
+          roll={rollUp.counting ? SPIN_ROLL : DEATH_ROLL}
           rate={
             <>
               About <Num color={RED}>1</Num> every <Num color={RED}>{Math.round(SECONDS_PER_DEATH)}</Num> sec

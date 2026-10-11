@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { RollingNumber } from "@/components/RollingNumber";
 import { CASES_PER_SECOND, DEATHS_PER_SECOND } from "@/lib/burden";
 
-// Small chevron in the top-right corner of the sticky bar. Opens a panel under the bar:
+// Small chevron in the top-right corner of the sticky bar. Pressing it sends a dark ripple out
+// of the button, orange at its leading edge with two faint rings running ahead, until it fills
+// the whole screen. Then the sentence fades in, centred, with the numbers huge:
 // "In the time you've been watching this presentation, mosquito-borne illnesses have infected
-// X people and claimed Y lives." The clock starts when the page loads (intro included), and X and Y use the
-// same global rates as the main counters.
+// X people and claimed Y lives." A click anywhere, the chevron, or Escape draws the wave back
+// into the button. X and Y count from page load (intro included) at the same global rates as
+// the main counters.
 
 const INK = "#ECE6DA";
 const BG = "#13110F";
@@ -15,6 +19,11 @@ const ORANGE = "#F07636";
 const RED = "#E0434A";
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
+
+/** How long the wave takes to fill the screen, and to draw back. */
+const OPEN_MS = 1000;
+const CLOSE_MS = 700;
+const WAVE_EASE = "cubic-bezier(0.65, 0, 0.35, 1)";
 
 /** Seconds since the page loaded (including the intro splash), refreshed every second. */
 function useWatchingSeconds(): number | null {
@@ -31,117 +40,242 @@ function useWatchingSeconds(): number | null {
   return secs;
 }
 
-export function WatchingDropdown({ rowHeight }: { rowHeight: number }) {
-  const [open, setOpen] = useState(false);
-  const secs = useWatchingSeconds();
-  const rootRef = useRef<HTMLDivElement>(null);
+type Origin = { x: number; y: number; r: number; size: number };
 
-  // Close on Escape or a click anywhere outside the button and panel.
+/** Render as a direct child of the fixed bar. `rowHeight` is the main row's current height,
+ *  to centre the button in it. */
+export function WatchingDropdown({ rowHeight }: { rowHeight: number }) {
+  const secs = useWatchingSeconds();
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // origin set: the overlay exists. expanded: the wave is out (or heading out).
+  const [origin, setOrigin] = useState<Origin | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [reduced, setReduced] = useState(false);
+  const closeTimer = useRef(0);
+
+  const open = useCallback(() => {
+    const b = btnRef.current?.getBoundingClientRect();
+    if (!b) return;
+    const x = b.left + b.width / 2;
+    const y = b.top + b.height / 2;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    // Radius that reaches the farthest corner, plus room for the glowing edge to clear it.
+    const r = Math.hypot(Math.max(x, w - x), Math.max(y, h - y)) + 120;
+    setReduced(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    window.clearTimeout(closeTimer.current);
+    setOrigin({ x, y, r, size: b.width });
+    // Two frames later: start the transition from scale(0).
+    requestAnimationFrame(() => requestAnimationFrame(() => setExpanded(true)));
+  }, []);
+
+  const close = useCallback(() => {
+    setExpanded(false);
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setOrigin(null), CLOSE_MS);
+  }, []);
+
+  // Escape closes; the page underneath doesn't scroll while the wave is up.
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    const onDown = (e: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    };
+    if (!origin) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("keydown", onKey);
-    window.addEventListener("pointerdown", onDown);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("pointerdown", onDown);
+      document.body.style.overflow = prev;
     };
-  }, [open]);
+  }, [origin, close]);
+
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
   const infected = secs === null ? null : Math.floor(secs * CASES_PER_SECOND);
   const deaths = secs === null ? null : Math.floor(secs * DEATHS_PER_SECOND);
+  const isOpen = origin !== null;
 
   return (
-    <div ref={rootRef}>
+    <>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-controls="watching-panel"
+        onClick={() => (isOpen ? close() : open())}
+        aria-expanded={expanded}
+        aria-controls="watching-wave"
+        aria-label="Show what has happened while you've been watching"
+        className="absolute right-3 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-sm border border-[#ECE6DA]/25 text-[#ECE6DA]/80 transition-colors hover:border-[#ECE6DA]/60 hover:text-[#ECE6DA] sm:right-4"
         style={{ top: `${rowHeight / 2}px` }}
-        aria-label={open ? "Hide what has happened while you've been watching" : "Show what has happened while you've been watching"}
-        className="absolute right-3 z-10 flex h-8 w-8 -translate-y-1/2 items-center sm:right-4 justify-center rounded-sm border border-[#ECE6DA]/25 text-[#ECE6DA]/80 transition-colors hover:border-[#ECE6DA]/60 hover:text-[#ECE6DA]"
       >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="none"
-          aria-hidden="true"
-          className="transition-transform duration-300"
-          style={{ transform: open ? "rotate(180deg)" : "none" }}
-        >
-          <path d="M2.5 5 7 9.5 11.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <Chevron up={false} />
       </button>
 
-      {/* Panel: hangs from the bottom edge of the bar, flush with the right side */}
+      {origin &&
+        createPortal(
+          <Wave origin={origin} expanded={expanded} reduced={reduced} onClose={close} infected={infected} deaths={deaths} />,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function Wave({
+  origin,
+  expanded,
+  reduced,
+  onClose,
+  infected,
+  deaths,
+}: {
+  origin: Origin;
+  expanded: boolean;
+  reduced: boolean;
+  onClose: () => void;
+  infected: number | null;
+  deaths: number | null;
+}) {
+  const { x, y, r, size } = origin;
+  const ms = expanded ? OPEN_MS : CLOSE_MS;
+  // A circle 2r across, centred on the button, scaled from 0 to 1.
+  const circle: React.CSSProperties = {
+    position: "absolute",
+    left: x - r,
+    top: y - r,
+    width: r * 2,
+    height: r * 2,
+    borderRadius: "9999px",
+    transformOrigin: "center",
+    willChange: "transform",
+  };
+
+  return (
+    <div
+      id="watching-wave"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Since you started watching"
+      onClick={onClose}
+      className="fixed inset-0 z-[60] cursor-pointer overflow-hidden"
+      style={{ color: INK }}
+    >
+      {/* Two faint rings run ahead of the wave on the way out, fading as they go */}
+      {!reduced &&
+        [0, 1].map((i) => (
+          <div
+            key={i}
+            aria-hidden="true"
+            style={{
+              ...circle,
+              border: `1.5px solid ${ORANGE}`,
+              transform: `scale(${expanded ? 1 : 0})`,
+              opacity: expanded ? 0 : 0.7 - i * 0.25,
+              transition: expanded
+                ? `transform ${700 + i * 120}ms cubic-bezier(0.25, 0.6, 0.3, 1), opacity ${700 + i * 120}ms ease-in`
+                : "none",
+              visibility: expanded ? "visible" : "hidden",
+            }}
+          />
+        ))}
+
+      {/* The wave: near-black fill with an orange leading edge */}
       <div
-        id="watching-panel"
-        role="region"
-        aria-label="Since you started watching"
-        aria-hidden={!open}
-        className="absolute top-full right-0 w-[min(480px,100vw)] origin-top-right border-b border-l border-[#ECE6DA]/20 transition-[opacity,transform] duration-300 ease-out"
+        aria-hidden="true"
         style={{
+          ...circle,
           backgroundColor: BG,
-          color: INK,
-          boxShadow: "0 16px 40px rgba(0,0,0,0.45)",
-          opacity: open ? 1 : 0,
-          transform: open ? "translateY(0)" : "translateY(-8px)",
-          visibility: open ? "visible" : "hidden",
-          pointerEvents: open ? "auto" : "none",
+          boxShadow: `inset 0 0 0 2px ${ORANGE}, inset 0 0 90px 12px rgba(240,118,54,0.28), 0 0 60px 6px rgba(240,118,54,0.25)`,
+          transform: reduced ? "none" : `scale(${expanded ? 1 : 0})`,
+          opacity: reduced ? (expanded ? 1 : 0) : 1,
+          transition: reduced ? "opacity 250ms ease" : `transform ${ms}ms ${WAVE_EASE}`,
+        }}
+      />
+
+      {/* Same chevron, flipped, sitting exactly over the bar's button: click to close */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        aria-label="Close"
+        className="absolute flex items-center justify-center rounded-sm border border-[#ECE6DA]/40 text-[#ECE6DA] hover:border-[#ECE6DA]/80"
+        style={{
+          left: x - size / 2,
+          top: y - size / 2,
+          width: size,
+          height: size,
+          opacity: expanded ? 1 : 0,
+          transition: `opacity ${expanded ? 300 : 150}ms ease ${expanded ? OPEN_MS * 0.5 : 0}ms`,
         }}
       >
-        <div className="px-7 pt-6 pb-7 sm:px-9">
-          <p className="text-[12px] leading-relaxed tracking-[0.12em] uppercase opacity-75" style={TYPE}>
-            In the time you’ve been watching this presentation, mosquito-borne illnesses have
-          </p>
+        <Chevron up />
+      </button>
 
-          <div className="mt-4 flex flex-col gap-3">
-            <Line lead="infected" tail="people">
-              <RollingNumber
-                value={infected}
-                digitWidth="0.42em"
-                cellHeight="0.84em"
-                cellLine="1em"
-                duration={600}
-                easing="cubic-bezier(0.2, 0.8, 0.2, 1)"
-                style={{ ...DISPLAY, color: ORANGE }}
-              />
-            </Line>
-            <Line lead="and claimed" tail="lives">
-              <RollingNumber
-                value={deaths}
-                digitWidth="0.42em"
-                cellHeight="0.84em"
-                cellLine="1em"
-                duration={1500}
-                easing="cubic-bezier(0.45, 0, 0.25, 1.15)"
-                style={{ ...DISPLAY, color: RED }}
-              />
-            </Line>
-          </div>
-        </div>
+      {/* The sentence, centred, numbers huge */}
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center sm:px-12"
+        style={{
+          opacity: expanded ? 1 : 0,
+          transform: expanded ? "translateY(0)" : "translateY(12px)",
+          transition: expanded
+            ? `opacity 500ms ease ${reduced ? 0 : OPEN_MS * 0.6}ms, transform 700ms cubic-bezier(0.2, 0.8, 0.2, 1) ${reduced ? 0 : OPEN_MS * 0.6}ms`
+            : "opacity 180ms ease, transform 180ms ease",
+        }}
+      >
+        <p
+          className="max-w-[22ch] leading-[1.05] tracking-wide opacity-85 sm:max-w-[34ch]"
+          style={{ ...DISPLAY, fontSize: "clamp(26px, 3.6vw, 54px)" }}
+        >
+          In the time you’ve been watching this presentation, mosquito-borne illnesses have
+        </p>
+
+        <Row lead="infected" tail="people">
+          <BigNumber value={infected} color={ORANGE} duration={600} easing="cubic-bezier(0.2, 0.8, 0.2, 1)" />
+        </Row>
+        <Row lead="and claimed" tail="lives.">
+          <BigNumber value={deaths} color={RED} duration={1500} easing="cubic-bezier(0.45, 0, 0.25, 1.15)" />
+        </Row>
+
+        <p className="absolute bottom-6 text-[11px] tracking-[0.2em] uppercase opacity-40" style={TYPE}>
+          Click anywhere to close
+        </p>
       </div>
     </div>
   );
 }
 
-function Line({ lead, tail, children }: { lead: string; tail: string; children: React.ReactNode }) {
+function Row({ lead, tail, children }: { lead: string; tail: string; children: React.ReactNode }) {
+  const word = { ...DISPLAY, fontSize: "clamp(26px, 3.6vw, 54px)" };
   return (
-    <div className="flex items-baseline gap-3">
-      <span className="w-[6.5rem] shrink-0 text-[12px] tracking-[0.12em] uppercase opacity-75" style={TYPE}>
+    <div className="mt-[0.5vh] flex flex-wrap items-baseline justify-center gap-x-[0.35em] leading-none">
+      <span className="tracking-wide opacity-85" style={word}>
         {lead}
       </span>
-      <span className="text-[72px] leading-none" style={DISPLAY}>
-        {children}
-      </span>
-      <span className="text-[12px] tracking-[0.12em] uppercase opacity-75" style={TYPE}>
+      <span style={{ ...DISPLAY, fontSize: "clamp(84px, 15vw, 230px)" }}>{children}</span>
+      <span className="tracking-wide opacity-85" style={word}>
         {tail}
       </span>
     </div>
+  );
+}
+
+function BigNumber({ value, color, duration, easing }: { value: number | null; color: string; duration: number; easing: string }) {
+  return (
+    <RollingNumber
+      value={value}
+      digitWidth="0.42em"
+      cellHeight="0.84em"
+      cellLine="1em"
+      duration={duration}
+      easing={easing}
+      style={{ ...DISPLAY, color }}
+    />
+  );
+}
+
+function Chevron({ up }: { up: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ transform: up ? "rotate(180deg)" : "none" }}>
+      <path d="M2.5 5 7 9.5 11.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

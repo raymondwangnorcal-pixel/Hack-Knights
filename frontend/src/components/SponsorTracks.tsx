@@ -166,7 +166,7 @@ export function SponsorSection() {
   return (
     // Fills the screen under the pinned header (86 px tall on small screens, 52 px on large). The card
     // sits in the middle row, so it is vertically centered; the up-arrow fills the top row and an
-    // equal empty row below keeps the card exactly in the middle.
+    // invisible copy of it fills the bottom row, so the card stays exactly in the middle.
     <div
       id={SPONSORS_ID}
       className="grid min-h-[calc(100svh-86px)] scroll-mt-[86px] grid-rows-[1fr_auto_1fr] gap-4 lg:min-h-[calc(100svh-52px)] lg:scroll-mt-[52px]"
@@ -249,7 +249,10 @@ export function SponsorSection() {
           </div>
         </div>
       </section>
-      <div aria-hidden="true" />
+      {/* An invisible copy of the arrow row, so the rows above and below the card are always equal. */}
+      <div className="invisible flex items-start justify-center" aria-hidden="true" inert>
+        <ToPreventionArrow />
+      </div>
     </div>
   );
 }

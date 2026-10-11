@@ -22,8 +22,8 @@ const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" 
 const BODY = { fontFamily: "'Roboto Condensed', var(--font-geist-sans), sans-serif" };
 /** The sentence and the small words around the numbers share one size; the numbers dwarf them. */
 const WORD_SIZE = "clamp(20px, 2.6vw, 38px)";
-// Capped by height (laptops) and width (phones, where a 4-digit number plus both words must fit).
-const NUMBER_SIZE = "clamp(56px, min(17vh, 17vw), 200px)";
+// Capped by height (laptops) and width (phones, where a 4-digit number plus its unit word must fit).
+const NUMBER_SIZE = "clamp(56px, min(19vh, 21vw), 210px)";
 
 /** How long the wave takes to fill the screen, and to draw back. */
 const OPEN_MS = 1000;
@@ -227,23 +227,20 @@ function Wave({
         }}
       >
         <p className="max-w-[30ch] leading-[1.25] opacity-80" style={{ ...BODY, fontSize: WORD_SIZE, fontWeight: 300 }}>
-          In the time you’ve been watching this presentation, mosquito-borne illnesses have
+          In the time you’ve been watching this presentation, mosquito-borne illnesses have infected
         </p>
 
-        {/* One grid for both rows: words either side, numbers right-aligned in a shared column so
-            the digits line up, words sitting on the numbers' baseline. */}
-        <div
-          className="mt-[4vh] grid items-end"
-          style={{ gridTemplateColumns: "1fr auto 1fr", columnGap: "clamp(12px, 1.6vw, 28px)", rowGap: "clamp(18px, 4vh, 48px)" }}
-        >
-          <Word align="end">infected</Word>
+        <NumberLine tail="people">
           <BigNumber value={infected} color={ORANGE} duration={600} easing="cubic-bezier(0.2, 0.8, 0.2, 1)" />
-          <Word align="start">people</Word>
+        </NumberLine>
 
-          <Word align="end">and claimed</Word>
+        <p className="text-[12px] tracking-[0.24em] uppercase opacity-60 sm:text-[13px]" style={TYPE}>
+          and claimed
+        </p>
+
+        <NumberLine tail={deaths === 1 ? "life." : "lives."}>
           <BigNumber value={deaths} color={RED} duration={1500} easing="cubic-bezier(0.45, 0, 0.25, 1.15)" />
-          <Word align="start">{deaths === 1 ? "life." : "lives."}</Word>
-        </div>
+        </NumberLine>
 
         <p className="absolute bottom-6 text-[11px] tracking-[0.2em] uppercase opacity-40" style={TYPE}>
           Click anywhere to close
@@ -253,14 +250,19 @@ function Wave({
   );
 }
 
-function Word({ align, children }: { align: "start" | "end"; children: React.ReactNode }) {
+/** A big number, centred on the page, with its unit word hanging off its right on the baseline
+ *  (so the word never pushes the number off centre). */
+function NumberLine({ tail, children }: { tail: string; children: React.ReactNode }) {
   return (
-    <span
-      className="whitespace-nowrap leading-none"
-      style={{ ...BODY, fontSize: WORD_SIZE, justifySelf: align, paddingBottom: "0.08em" }}
-    >
+    <div className="relative my-[2.2vh] inline-flex">
       {children}
-    </span>
+      <span
+        className="absolute bottom-0 left-full ml-[0.45em] whitespace-nowrap leading-none opacity-85"
+        style={{ ...BODY, fontSize: WORD_SIZE, paddingBottom: "0.08em" }}
+      >
+        {tail}
+      </span>
+    </div>
   );
 }
 
@@ -274,7 +276,6 @@ function BigNumber({ value, color, duration, easing }: { value: number | null; c
       duration={duration}
       easing={easing}
       style={{ ...DISPLAY, color, fontSize: NUMBER_SIZE }}
-      className="justify-self-end"
     />
   );
 }

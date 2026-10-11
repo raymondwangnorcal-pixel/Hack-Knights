@@ -39,7 +39,7 @@ const CITY: Record<Country, string> = { NG: "Lagos", BR: "São Paulo", US: "New 
 const COUNTRY_NAME: Record<Country, string> = { NG: "Nigeria", BR: "Brazil", US: "USA" };
 const MAP_HEIGHT = 460;
 // How many days of detections are drawn as dots (7 matches the main app).
-const DOT_DAYS = 14;
+const DOT_DAYS = 7;
 
 type Place = { country: Country; district: string };
 

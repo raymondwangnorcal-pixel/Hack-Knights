@@ -278,9 +278,10 @@ const DOT_GROWTH_PER_ZOOM = 1.2;
 function dotColors(detections: Detection[], palette: DotPalette): Map<string, string> {
   const byDistrict = new Map<string, Detection[]>();
   for (const o of detections) {
-    const list = byDistrict.get(o.district);
+    const key = o.district_id ?? o.district; // dots of one district (or one hotspot) share a colour scale
+    const list = byDistrict.get(key);
     if (list) list.push(o);
-    else byDistrict.set(o.district, [o]);
+    else byDistrict.set(key, [o]);
   }
 
   const colors = new Map<string, string>();
@@ -668,9 +669,16 @@ function MapOverlay({ country, detections, palette }: { country: Country; detect
       placeHover();
       redraw();
     };
-    const onClick = (e: L.LeafletMouseEvent) => pick(hit(e.containerPoint));
+    // City and district labels sit on top of the dots. A click or hover that lands on a label belongs to the
+    // label alone, so a dot underneath it is never picked or hovered at the same time.
+    const overLabel = (e: L.LeafletMouseEvent) =>
+      !!(e.originalEvent.target as HTMLElement | null)?.closest?.(".city-label, .district-label");
+    const onClick = (e: L.LeafletMouseEvent) => {
+      if (overLabel(e)) return;
+      pick(hit(e.containerPoint));
+    };
     const onHover = (e: L.LeafletMouseEvent) => {
-      const o = hit(e.containerPoint);
+      const o = overLabel(e) ? null : hit(e.containerPoint);
       container.style.cursor = o ? "pointer" : "";
       setHover(o);
     };
@@ -685,6 +693,7 @@ function MapOverlay({ country, detections, palette }: { country: Country; detect
     let adm2: Line[] = [];
     let queued = 0;
     const redraw = () => {
+      if (!alive) return; // a late tile load must not draw on a map that has been removed
       cancelAnimationFrame(queued);
       queued = requestAnimationFrame(() => draw());
     };

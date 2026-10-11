@@ -119,7 +119,7 @@ export function ListenScreen() {
   const [prevention, setPrevention] = useState<{ key: string; data: PreventionResponse } | null>(null);
   const [preventionRefresh, setPreventionRefresh] = useState(0);
   const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
-  const [mic, setMic] = useState<{ id: string; label: string } | null>(null); // the mic in use
+  const [mic, setMic] = useState<{ id: string; label: string; filter?: "off" | "on" | "unknown" } | null>(null); // the mic in use
 
   const gate = useRef<WakeGate | null>(null);
   const sampleCtx = useRef<AudioContext | null>(null);
@@ -259,7 +259,7 @@ export function ListenScreen() {
       gate.current = g;
       await g.start((f) => (frame.current = f), () => onTrigger(id), micId ?? readMic());
       if (id !== run.current) return g.stop();
-      setMic({ id: g.micId, label: g.micLabel });
+      setMic({ id: g.micId, label: g.micLabel, filter: g.voiceFilter });
       listMics().then(setMics).catch(() => {});
       const an = makeAnalyser(g.context!);
       g.tap(an);
@@ -555,6 +555,12 @@ export function ListenScreen() {
           {mic && (
             <label className="relative flex basis-full items-center gap-1.5 text-[12px] tracking-[0.12em] uppercase opacity-70" style={MONO}>
               <span>Mic: {mic.label || "Default microphone"}</span>
+              {mic.filter === "on" && (
+                <span style={{ color: AMBER }} title="This browser kept its voice filter on, which can quiet a steady buzz">
+                  · voice filter on
+                </span>
+              )}
+              {mic.filter === "off" && <span className="opacity-70">· raw audio</span>}
               {mics.length > 1 && (
                 <>
                   <span aria-hidden="true" className="opacity-60">▾</span>

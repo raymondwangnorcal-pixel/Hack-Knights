@@ -168,6 +168,22 @@ export class BuzzTracker {
 
 const RAW_AUDIO = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
 
+// Phone voice processing treats a steady buzz as background noise and turns it down. Safari only
+// skips its voice processing when echo cancellation is off, and has not always honored that when
+// asked in getUserMedia, so we ask the track again once it is open (WebKit bugs 179411, 192932).
+async function rawTrack(stream: MediaStream): Promise<MediaStream> {
+  const track = stream.getAudioTracks()[0];
+  if (track?.getSettings().echoCancellation !== false) await track?.applyConstraints(RAW_AUDIO).catch(() => {});
+  return stream;
+}
+
+/** "off" when the browser confirms voice processing is off, "on" when it is still on, "unknown" when it won't say. */
+export function voiceFilterState(stream: MediaStream | null): "off" | "on" | "unknown" {
+  const s = stream?.getAudioTracks()[0]?.getSettings();
+  if (!s || (s.echoCancellation === undefined && s.noiseSuppression === undefined)) return "unknown";
+  return s.echoCancellation || s.noiseSuppression ? "on" : "off";
+}
+
 /** True for a laptop's own mic ("MacBook Pro Microphone", "Built-in Microphone", "Internal …"). */
 export function isBuiltInMic(label: string): boolean {
   return /macbook|built-?in|internal/i.test(label) && !/iphone|ipad|continuity|airpods|bluetooth|virtual/i.test(label);
@@ -184,7 +200,7 @@ export async function listMics(): Promise<MediaDeviceInfo[]> {
 export async function openMic(preferredId?: string | null): Promise<MediaStream> {
   if (preferredId) {
     try {
-      return await navigator.mediaDevices.getUserMedia({ audio: { ...RAW_AUDIO, deviceId: { exact: preferredId } } });
+      return await rawTrack(await navigator.mediaDevices.getUserMedia({ audio: { ...RAW_AUDIO, deviceId: { exact: preferredId } } }));
     } catch (e) {
       // Unplugged or renamed: fall back below. A permission refusal must still surface.
       if (e instanceof DOMException && e.name === "NotAllowedError") throw e;
@@ -192,15 +208,15 @@ export async function openMic(preferredId?: string | null): Promise<MediaStream>
   }
   // Device labels only appear after permission, so open the default first, then switch if needed.
   const stream = await navigator.mediaDevices.getUserMedia({ audio: RAW_AUDIO });
-  if (isBuiltInMic(stream.getAudioTracks()[0]?.label ?? "")) return stream;
+  if (isBuiltInMic(stream.getAudioTracks()[0]?.label ?? "")) return rawTrack(stream);
   const builtIn = (await listMics()).find((d) => isBuiltInMic(d.label));
-  if (!builtIn) return stream;
+  if (!builtIn) return rawTrack(stream);
   try {
     const own = await navigator.mediaDevices.getUserMedia({ audio: { ...RAW_AUDIO, deviceId: { exact: builtIn.deviceId } } });
     stream.getTracks().forEach((t) => t.stop());
-    return own;
+    return rawTrack(own);
   } catch {
-    return stream;
+    return rawTrack(stream);
   }
 }
 
@@ -219,6 +235,10 @@ export class WakeGate {
   /** Name of the mic actually in use, e.g. "MacBook Pro Microphone (Built-in)". */
   get micLabel(): string {
     return this.stream?.getAudioTracks()[0]?.label ?? "";
+  }
+
+  get voiceFilter(): "off" | "on" | "unknown" {
+    return voiceFilterState(this.stream);
   }
 
   get micId(): string {

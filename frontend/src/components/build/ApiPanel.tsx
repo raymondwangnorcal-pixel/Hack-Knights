@@ -86,7 +86,7 @@ const ENDPOINTS = [
 
 export function ApiPanel({ apiKey, org, limit }: { apiKey: string; org: string; limit: number }) {
   const origin = useSyncExternalStore(noop, () => window.location.origin, () => "");
-  const host = origin || "https://your-mozzy-host";
+  const host = origin || "https://your-culicid-host";
   const [lang, setLang] = useState<Lang>("curl");
   const [copied, setCopied] = useState<"key" | "code" | null>(null);
   const [call, setCall] = useState<(typeof CALLS)[number]["id"]>("risk");

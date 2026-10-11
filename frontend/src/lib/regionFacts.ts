@@ -9,7 +9,7 @@
 //     >1M cases across South-East Asia and the Western Pacific.
 //   ECDC West Nile virus 2024 season: 1,436 locally acquired cases and 125 deaths in Europe.
 //
-// Death bands are Mozzy's estimate: those 2024 death counts against each region's population,
+// Death bands are Culicid's estimate: those 2024 death counts against each region's population,
 // banded (like WHO's deaths-per-million maps) because only Africa and the Americas have exact
 // regional totals. The remaining ~30,000 malaria deaths fall across the Middle East and Asia.
 

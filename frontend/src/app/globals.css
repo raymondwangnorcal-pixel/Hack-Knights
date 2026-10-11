@@ -25,7 +25,7 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-/* Mozzy themes, after vercel.com: consumer side light, government/nonprofit side dark. */
+/* Culicid themes, after vercel.com: consumer side light, government/nonprofit side dark. */
 .theme-light {
   --background: #ffffff;
   --foreground: #0a0a0a;

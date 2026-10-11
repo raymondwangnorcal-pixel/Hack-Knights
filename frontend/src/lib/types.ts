@@ -1,4 +1,4 @@
-// Shared API contract for Mozzy.
+// Shared API contract for Culicid.
 // The Data/ML service and these Next.js routes must return exactly these shapes.
 // See frontend/API_CONTRACT.md for the human-readable version.
 

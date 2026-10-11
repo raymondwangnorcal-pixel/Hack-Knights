@@ -1,4 +1,4 @@
-# Mozzy frontend
+# Culicid frontend
 
 Next.js app for the citizen listening app (`/listen`) and the health dashboard (`/dashboard`).
 

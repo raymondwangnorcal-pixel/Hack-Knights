@@ -168,7 +168,7 @@ export function IntroVideo() {
         suppressHydrationWarning
         role="dialog"
         aria-modal="true"
-        aria-label="Mozzy intro film"
+        aria-label="Culicid intro film"
         aria-hidden={phase === "off" ? true : undefined}
         // Lenis (smooth scroll) ignores wheel events over the overlay.
         data-lenis-prevent=""
@@ -199,7 +199,7 @@ export function IntroVideo() {
             Shazam for mosquitoes
           </p>
           <h1 className="mt-2 text-[clamp(5.5rem,16vw,13rem)] leading-[0.85] tracking-wide" style={DISPLAY}>
-            Mozzy
+            Culicid
           </h1>
           <button
             ref={enter}

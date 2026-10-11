@@ -225,6 +225,8 @@ export class WakeGate {
   private analyser: AnalyserNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private onFrame: ((f: WakeGateFrame) => void) | null = null;
+  private onTrigger: (() => void) | null = null;
   stream: MediaStream | null = null;
   private opts: Required<WakeGateOptions>;
 
@@ -258,23 +260,43 @@ export class WakeGate {
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.3;
     source.connect(this.analyser);
+    this.onFrame = onFrame;
+    this.onTrigger = onTrigger;
+    this.loop();
+  }
 
-    const bins = new Float32Array(this.analyser.frequencyBinCount);
-    const hzPerBin = this.ctx.sampleRate / this.analyser.fftSize;
+  /** The ~100-checks-a-second loop. Each run starts a fresh score, so a resume never fires on leftovers. */
+  private loop() {
+    if (!this.analyser || !this.ctx || this.timer) return;
+    const analyser = this.analyser;
+    const bins = new Float32Array(analyser.frequencyBinCount);
+    const hzPerBin = this.ctx.sampleRate / analyser.fftSize;
     const tracker = new BuzzTracker(this.opts);
     let last = performance.now();
 
     this.timer = setInterval(() => {
-      if (!this.analyser) return;
+      if (this.analyser !== analyser) return;
       const now = performance.now();
       const dt = now - last; // real time: timers run late on a busy page
       last = now;
-      this.analyser.getFloatFrequencyData(bins);
+      analyser.getFloatFrequencyData(bins);
       const frame = assessSpectrum(bins, hzPerBin, this.opts);
       const fire = tracker.step(frame, dt);
-      onFrame({ ...frame, hotMs: tracker.hotMs, progress: tracker.progress });
-      if (fire) onTrigger();
+      this.onFrame?.({ ...frame, hotMs: tracker.hotMs, progress: tracker.progress });
+      if (fire) this.onTrigger?.();
     }, 1000 / this.opts.checksPerSecond);
+  }
+
+  /** Listen again after a capture, on the same open mic (continuous mode). */
+  resume() {
+    if (this.ctx?.state === "suspended") this.ctx.resume().catch(() => {});
+    this.loop();
+  }
+
+  /** True while the mic is still delivering sound (false after the OS takes it away, e.g. screen lock). */
+  get micAlive(): boolean {
+    const track = this.stream?.getAudioTracks()[0];
+    return !!track && track.readyState === "live" && !track.muted;
   }
 
   /** Connect an extra node (e.g. a finer analyser for a spectrogram) to the live mic. */
@@ -301,6 +323,8 @@ export class WakeGate {
     this.ctx = null;
     this.analyser = null;
     this.source = null;
+    this.onFrame = null;
+    this.onTrigger = null;
   }
 }
 

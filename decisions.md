@@ -304,6 +304,17 @@ Decisions: one background `LISTEN` connection reconnects every 3 s on failure an
 
 Verified locally: missing or unknown key → 401; bad country → 400; unknown district → 422; risk and forecast return live Tiger data with rate-limit headers. `POST /identify` was **not** run end to end, because it writes a real row to Tiger.
 
+## 16. Keep listening (2026-10-11)
+
+| Decision | Why |
+| --- | --- |
+| The listening screen keeps listening after each identification (**Keep listening**, on by default, remembered per device). The same mic stays open; the wake gate re-arms on it (`WakeGate.resume()`), and the latest result stays on screen while it listens for the next buzz. Turning it off restores the old one-shot flow. | The product is "leave the phone on the nightstand and it catches every buzz", not one tap per mosquito. |
+| After each result the gate rests **8 s** before it can fire again; "Capture now" still works during the rest. | One mosquito circling, or one 8 s demo clip, should be one detection, not a stream of uploads. |
+| While listening, the page holds a **Screen Wake Lock** (`lib/screenAwake.ts`; Chrome, Safari 16.4+), taken again whenever the page becomes visible. | A locked phone takes the mic away from the browser. True background listening with the screen locked needs the native app. |
+| When the page comes back (unlock, tab switch) and the phone has taken the mic, it reopens on its own; where the browser needs a tap first, it says "Listening paused while the screen was off. Tap the mic to resume." | No silent dead mic. |
+
+Verified in headless Chrome with a fake mic playing two buzzes per 47 s loop: four buzzes, four captures, none in the quiet gaps; with Keep listening off, one capture and back to Ready.
+
 ## Change log
 - **2026-10-09/10:** Tiger schema and districts loaded; `/classify` service with mock phone; Snowflake set up over REST; dengue history and weather loaded; dengue forecast trained, back-tested and published to Tiger.
 - **2026-10-10:** Audio features and genus/species classifier trained; HumBug detector tried and rejected; tonality gate adopted; new pipeline wired into `/classify`; demo clips exported. This document started.
@@ -321,3 +332,4 @@ Verified locally: missing or unknown key → 401; bad country → 400; unknown d
 - **2026-10-11:** "How it works" page with eight hand-drawn diagrams; keyed Model API (`/api/v1/*`) added.
 - **2026-10-11:** First-visit video intro on the home page (`IntroVideo.tsx`): tap-to-enter for sound, Skip/Esc, fades into the hero; skipped on phones and for reduce-motion; `?intro=1` forces it for the stage demo, `?intro=0` hides it.
 - **2026-10-11:** Renamed Mozzy → Culicid in everything visible (titles, wordmarks, pages, docs, `/api/v1` `api` field). Internal identifiers kept so nothing breaks: `MOZZY_API_KEYS` env var, `X-Mozzy-*` headers, `mozzy-*` localStorage/cache keys.
+- **2026-10-11:** Keep listening: the listening screen re-arms after each result (8 s rest), holds a screen wake lock, and reopens the mic after the screen comes back.

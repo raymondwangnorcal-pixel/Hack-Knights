@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Spectrogram } from "@/components/Spectrogram";
 import classifyMock from "@/mocks/classify.json";
 import { WakeGate, listMics, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
+import { allowScreenSleep, keepScreenAwake, reacquireScreenLock } from "@/lib/screenAwake";
 import { stopSpeaking, toggleSpeak, unlockAudio, useVoiceState } from "@/lib/voice";
 import { LANGUAGES } from "@/lib/languages";
 import { pickSpoken } from "@/lib/spoken";
@@ -36,6 +37,9 @@ const MONO = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" 
 // Seconds recorded after the buzz is heard. The model scores 2 s windows, and on test clips its genus
 // accuracy was the same at 2–8 s, so 3 s keeps the wait short without losing anything.
 const CLIP_SECONDS = 3;
+// Keep-listening mode: after each identification the gate rests this long before it can fire again,
+// so one mosquito circling (or one 8 s demo clip) is one detection, not a stream of uploads.
+const COOLDOWN_MS = 8_000;
 // The picker offers Lagos and São Paulo; US (New York, from the backend) isn't on this screen yet.
 const CITY: Record<Country, string> = { NG: "Lagos", BR: "São Paulo", US: "New York" };
 const SAMPLE: Record<Country, string> = {
@@ -45,6 +49,7 @@ const SAMPLE: Record<Country, string> = {
 };
 const PLACE_KEY = "mozzy-place";
 const MIC_KEY = "mozzy-mic"; // a mic the user picked by hand on this device
+const KEEP_KEY = "culicid-keep-listening"; // "0" when the user turned Keep listening off
 
 type Stage = "idle" | "listening" | "recording" | "sample" | "uploading" | "result" | "error";
 type Place = { country: Country; district: string };
@@ -77,6 +82,20 @@ function saveMic(id: string) {
     localStorage.setItem(MIC_KEY, id);
   } catch {
     // Blocked storage: the pick lasts until reload.
+  }
+}
+function readKeep(): string | null {
+  try {
+    return localStorage.getItem(KEEP_KEY);
+  } catch {
+    return null;
+  }
+}
+function saveKeep(on: boolean) {
+  try {
+    localStorage.setItem(KEEP_KEY, on ? "1" : "0");
+  } catch {
+    // Blocked storage: the choice lasts until reload.
   }
 }
 function savePlace(p: Place) {
@@ -120,6 +139,12 @@ export function ListenScreen() {
   const [preventionRefresh, setPreventionRefresh] = useState(0);
   const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
   const [mic, setMic] = useState<{ id: string; label: string; filter?: "off" | "on" | "unknown" } | null>(null); // the mic in use
+  // Keep listening: on unless turned off on this device.
+  const savedKeep = useSyncExternalStore(noSubscribe, readKeep, () => null);
+  const [keepPick, setKeepPick] = useState<boolean | null>(null);
+  const continuous = keepPick ?? savedKeep !== "0";
+  const [heard, setHeard] = useState(0); // identifications since listening started
+  const [cooldown, setCooldown] = useState(0); // seconds until the gate listens again
 
   const gate = useRef<WakeGate | null>(null);
   const sampleCtx = useRef<AudioContext | null>(null);
@@ -127,6 +152,20 @@ export function ListenScreen() {
   const startedAt = useRef(0);
   const run = useRef(0); // bumps on every start/stop so stale async work drops its result
   const replay = useRef<HTMLAudioElement | null>(null);
+  const liveAnalyser = useRef<AnalyserNode | null>(null); // the mic's spectrogram feed, reused after each capture
+  const wantListening = useRef(false); // the user started listening and hasn't stopped
+  const keepRef = useRef(continuous);
+  const stageRef = useRef<Stage>("idle");
+  const coolTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const coolUntil = useRef(0);
+  const startRef = useRef<((micId?: string, auto?: boolean) => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    keepRef.current = continuous;
+  }, [continuous]);
+  useEffect(() => {
+    stageRef.current = stage;
+  }, [stage]);
 
   // District list + risk for both cities (the picker needs both).
   useEffect(() => {
@@ -160,11 +199,21 @@ export function ListenScreen() {
     const id = setInterval(() => {
       setElapsed((performance.now() - startedAt.current) / 1000);
       setLevel(frame.current?.progress ?? 0); // how close the wake gate is to firing
+      setCooldown(Math.max(0, Math.ceil((coolUntil.current - performance.now()) / 1000)));
     }, 200);
     return () => clearInterval(id);
   }, [active]);
 
+  const clearCooldown = useCallback(() => {
+    if (coolTimer.current) clearTimeout(coolTimer.current);
+    coolTimer.current = null;
+    coolUntil.current = 0;
+    setCooldown(0);
+  }, []);
+
   const releaseAudio = useCallback(() => {
+    clearCooldown();
+    allowScreenSleep();
     gate.current?.stop();
     gate.current = null;
     sampleCtx.current?.close().catch(() => {});
@@ -172,7 +221,7 @@ export function ListenScreen() {
     replay.current?.pause();
     setReplaying(false);
     setAnalyser(null);
-  }, []);
+  }, [clearCooldown]);
 
   useEffect(() => releaseAudio, [releaseAudio]);
 
@@ -213,16 +262,34 @@ export function ListenScreen() {
 
   function fail(e: unknown, id: number) {
     if (id !== run.current) return;
+    wantListening.current = false;
     releaseAudio();
     const msg = e instanceof Error ? e.message : String(e);
     setError(msg.includes("Permission") || msg.includes("NotAllowed") ? "Microphone blocked. Allow it in your browser settings." : msg);
     setStage("error");
   }
 
+  /** Keep-listening: back to the live picture, and the gate listens again after the cooldown. */
+  function rearm(g: WakeGate, id: number) {
+    setAnalyser(liveAnalyser.current);
+    setEpoch((e) => e + 1);
+    startedAt.current = performance.now();
+    setElapsed(0);
+    setStage("listening");
+    clearCooldown();
+    coolUntil.current = performance.now() + COOLDOWN_MS;
+    coolTimer.current = setTimeout(() => {
+      coolTimer.current = null;
+      coolUntil.current = 0;
+      if (id === run.current && gate.current === g) g.resume();
+    }, COOLDOWN_MS);
+  }
+
   async function onTrigger(id: number) {
     const g = gate.current;
     if (!g?.stream || id !== run.current) return;
     g.pause();
+    clearCooldown();
     const recordedAt = new Date().toISOString();
     setStage("recording");
     setEpoch((e) => e + 1); // the clip starts at 0 s on the spectrogram
@@ -231,23 +298,40 @@ export function ListenScreen() {
     try {
       const blob = await recordClip(g.stream, CLIP_SECONDS);
       if (id !== run.current) return;
-      g.stop();
-      gate.current = null;
+      if (!keepRef.current) {
+        // One-shot: the mic closes as soon as the clip is in.
+        g.stop();
+        gate.current = null;
+        wantListening.current = false;
+        allowScreenSleep();
+      }
       setAnalyser(null); // freeze the picture of the clip
       newClip(blob, CLIP_SECONDS);
       beginUpload();
       const ext = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
       const data = await classify(blob, `clip.${ext}`, id, recordedAt);
       setResult(data);
+      setHeard((n) => n + 1);
+      if (gate.current === g && keepRef.current && g.micAlive) return rearm(g, id);
+      if (gate.current === g) {
+        // Keep listening was switched off mid-capture, or the phone took the mic away.
+        const reopen = keepRef.current && document.visibilityState === "visible";
+        g.stop();
+        gate.current = null;
+        if (reopen) return void startRef.current?.(undefined, true);
+        wantListening.current = false;
+        allowScreenSleep();
+      }
       setStage("result");
     } catch (e) {
       fail(e, id);
     }
   }
 
-  /** `micId`: a mic just picked in the menu; otherwise the last hand-picked one, else the laptop's own. */
-  async function startListening(micId?: string) {
-    unlockAudio(); // inside the tap, so the result can speak later
+  /** `micId`: a mic just picked in the menu; otherwise the last hand-picked one, else the laptop's own.
+   *  `auto`: reopening the mic on our own after the phone took it away (no tap behind it). */
+  async function startListening(micId?: string, auto = false) {
+    if (!auto) unlockAudio(); // inside the tap, so the result can speak later
     const id = ++run.current;
     releaseAudio();
     setError("");
@@ -260,25 +344,60 @@ export function ListenScreen() {
       listMics().then(setMics).catch(() => {});
       const an = makeAnalyser(g.context!);
       g.tap(an);
+      liveAnalyser.current = an;
       setAnalyser(an);
       setEpoch((e) => e + 1);
       startedAt.current = performance.now();
       setElapsed(0);
+      if (!auto) setHeard(0);
+      wantListening.current = true;
+      keepScreenAwake();
       setStage("listening");
     } catch (e) {
+      if (auto && id === run.current) {
+        // Phones only reopen the mic after a tap: say so instead of showing a raw error.
+        wantListening.current = false;
+        releaseAudio();
+        setError("Listening paused while the screen was off. Tap the mic to resume.");
+        setStage(result ? "result" : "idle");
+        return;
+      }
       fail(e, id);
     }
   }
 
+  useEffect(() => {
+    startRef.current = startListening;
+  });
+
+  // Coming back to the page (unlocked phone, switched tabs): take the screen lock again, and if the
+  // phone took the mic away while we were listening, reopen it.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || !wantListening.current) return;
+      reacquireScreenLock();
+      const g = gate.current;
+      if (g?.micAlive) {
+        if (g.context && g.context.state !== "running") g.context.resume().catch(() => {});
+        return;
+      }
+      if (stageRef.current === "listening") startRef.current?.(undefined, true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   function stop() {
     stopSpeaking();
     run.current++;
+    wantListening.current = false;
     releaseAudio();
     setStage(result ? "result" : "idle");
   }
 
   async function playSample() {
     unlockAudio();
+    wantListening.current = false;
     const id = ++run.current;
     releaseAudio();
     setError("");
@@ -526,7 +645,7 @@ export function ListenScreen() {
           >
             {active ? <PauseIcon size={24} /> : <MicIcon size={26} />}
           </button>
-          <Status stage={stage} level={level} countdown={Math.max(0, Math.ceil(CLIP_SECONDS - elapsed))} />
+          <Status stage={stage} level={level} countdown={Math.max(0, Math.ceil(CLIP_SECONDS - elapsed))} resting={cooldown} />
           <span className="h-9 w-px bg-[#ECE6DA]/20" />
           {stage === "listening" ? (
             <button onClick={captureNow} className="flex items-center gap-2.5 text-[22px] tracking-wider uppercase hover:opacity-80" style={DISPLAY}>
@@ -543,6 +662,22 @@ export function ListenScreen() {
               <WaveIcon /> Sample
             </button>
           )}
+          <label
+            className="flex cursor-pointer items-center gap-2 text-[12px] tracking-[0.12em] uppercase opacity-80 hover:opacity-100"
+            style={MONO}
+            title="After each identification, go back to listening for the next buzz. Keeps the screen on."
+          >
+            <input
+              type="checkbox"
+              checked={continuous}
+              onChange={(e) => {
+                setKeepPick(e.target.checked);
+                saveKeep(e.target.checked);
+              }}
+              className="h-4 w-4 cursor-pointer accent-[#F07636]"
+            />
+            Keep listening
+          </label>
           {mic && (
             <label className="relative flex basis-full items-center gap-1.5 text-[12px] tracking-[0.12em] uppercase opacity-70" style={MONO}>
               <span>Mic: {mic.label || "Default microphone"}</span>
@@ -552,6 +687,11 @@ export function ListenScreen() {
                 </span>
               )}
               {mic.filter === "off" && <span className="opacity-70">· raw audio</span>}
+              {heard > 0 && continuous && (
+                <span className="opacity-70">
+                  · {heard} {heard === 1 ? "buzz" : "buzzes"} caught
+                </span>
+              )}
               {mics.length > 1 && (
                 <>
                   <span aria-hidden="true" className="opacity-60">▾</span>
@@ -690,11 +830,11 @@ function spokenLine(r: ClassifyResponse, steps: string[], language: Language): s
   return `${name}${sep}${body}`;
 }
 
-function Status({ stage, level, countdown }: { stage: Stage; level: number; countdown: number }) {
+function Status({ stage, level, countdown, resting }: { stage: Stage; level: number; countdown: number; resting: number }) {
   const map: Record<Stage, [string, string, boolean]> = {
     idle: ["Ready", TEAL, false],
     result: ["Ready", TEAL, false],
-    listening: ["Listening", AMBER, true],
+    listening: resting > 0 ? [`Listening again in ${resting}s`, TEAL, false] : ["Listening", AMBER, true],
     recording: [`Buzz heard · ${countdown}s`, RED, true],
     sample: ["Playing sample", AMBER, true],
     uploading: ["Identifying…", AMBER, true],
@@ -708,7 +848,7 @@ function Status({ stage, level, countdown }: { stage: Stage; level: number; coun
         <span className="relative h-3.5 w-3.5 rounded-full" style={{ backgroundColor: color }} />
       </span>
       {label}
-      {stage === "listening" && (
+      {stage === "listening" && resting === 0 && (
         // Fills as the wake gate hears a steady wingbeat tone; full = capture starts
         <span className="flex h-4 items-end gap-[3px]" aria-hidden="true">
           {[0.15, 0.3, 0.45, 0.6, 0.75].map((t) => (

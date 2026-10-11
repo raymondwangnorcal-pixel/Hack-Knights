@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import Lenis from "lenis";
 import "lenis/dist/lenis.css";
 
@@ -27,8 +28,14 @@ export function scrollToId(id: string) {
   }
 }
 
+// Pages that keep plain native scrolling (long reading pages).
+const NATIVE_SCROLL = ["/how-it-works"];
+
 export function SmoothScroll() {
+  const pathname = usePathname();
+  const native = NATIVE_SCROLL.includes(pathname);
   useEffect(() => {
+    if (native) return;
     lenis = new Lenis({
       lerp: LERP,
       wheelMultiplier: WHEEL,
@@ -42,6 +49,6 @@ export function SmoothScroll() {
       lenis?.destroy();
       lenis = null;
     };
-  }, []);
+  }, [native]);
   return null;
 }

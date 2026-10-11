@@ -19,6 +19,11 @@ const ORANGE = "#F07636";
 const RED = "#E0434A";
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
+const BODY = { fontFamily: "'Roboto Condensed', var(--font-geist-sans), sans-serif" };
+/** The sentence and the small words around the numbers share one size; the numbers dwarf them. */
+const WORD_SIZE = "clamp(20px, 2.6vw, 38px)";
+// Capped by height (laptops) and width (phones, where a 4-digit number plus both words must fit).
+const NUMBER_SIZE = "clamp(56px, min(17vh, 17vw), 200px)";
 
 /** How long the wave takes to fill the screen, and to draw back. */
 const OPEN_MS = 1000;
@@ -221,19 +226,24 @@ function Wave({
             : "opacity 180ms ease, transform 180ms ease",
         }}
       >
-        <p
-          className="max-w-[22ch] leading-[1.05] tracking-wide opacity-85 sm:max-w-[34ch]"
-          style={{ ...DISPLAY, fontSize: "clamp(26px, 3.6vw, 54px)" }}
-        >
+        <p className="max-w-[30ch] leading-[1.25] opacity-80" style={{ ...BODY, fontSize: WORD_SIZE, fontWeight: 300 }}>
           In the time you’ve been watching this presentation, mosquito-borne illnesses have
         </p>
 
-        <Row lead="infected" tail="people">
+        {/* One grid for both rows: words either side, numbers right-aligned in a shared column so
+            the digits line up, words sitting on the numbers' baseline. */}
+        <div
+          className="mt-[4vh] grid items-end"
+          style={{ gridTemplateColumns: "1fr auto 1fr", columnGap: "clamp(12px, 1.6vw, 28px)", rowGap: "clamp(18px, 4vh, 48px)" }}
+        >
+          <Word align="end">infected</Word>
           <BigNumber value={infected} color={ORANGE} duration={600} easing="cubic-bezier(0.2, 0.8, 0.2, 1)" />
-        </Row>
-        <Row lead="and claimed" tail="lives.">
+          <Word align="start">people</Word>
+
+          <Word align="end">and claimed</Word>
           <BigNumber value={deaths} color={RED} duration={1500} easing="cubic-bezier(0.45, 0, 0.25, 1.15)" />
-        </Row>
+          <Word align="start">{deaths === 1 ? "life." : "lives."}</Word>
+        </div>
 
         <p className="absolute bottom-6 text-[11px] tracking-[0.2em] uppercase opacity-40" style={TYPE}>
           Click anywhere to close
@@ -243,18 +253,14 @@ function Wave({
   );
 }
 
-function Row({ lead, tail, children }: { lead: string; tail: string; children: React.ReactNode }) {
-  const word = { ...DISPLAY, fontSize: "clamp(26px, 3.6vw, 54px)" };
+function Word({ align, children }: { align: "start" | "end"; children: React.ReactNode }) {
   return (
-    <div className="mt-[0.5vh] flex flex-wrap items-baseline justify-center gap-x-[0.35em] leading-none">
-      <span className="tracking-wide opacity-85" style={word}>
-        {lead}
-      </span>
-      <span style={{ ...DISPLAY, fontSize: "clamp(84px, 15vw, 230px)" }}>{children}</span>
-      <span className="tracking-wide opacity-85" style={word}>
-        {tail}
-      </span>
-    </div>
+    <span
+      className="whitespace-nowrap leading-none"
+      style={{ ...BODY, fontSize: WORD_SIZE, justifySelf: align, paddingBottom: "0.08em" }}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -267,7 +273,8 @@ function BigNumber({ value, color, duration, easing }: { value: number | null; c
       cellLine="1em"
       duration={duration}
       easing={easing}
-      style={{ ...DISPLAY, color }}
+      style={{ ...DISPLAY, color, fontSize: NUMBER_SIZE }}
+      className="justify-self-end"
     />
   );
 }

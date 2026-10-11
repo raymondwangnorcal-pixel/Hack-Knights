@@ -144,18 +144,47 @@ function CityLabels({ country, onSelect, marker }: { country: Country; onSelect:
       el.lastElementChild!.textContent = c.name;
       if (marker === "diamond") {
         // A cream diamond with a dark edge: a different shape from the round data dots, so a city never reads as a detection.
-        (el.firstElementChild as HTMLElement).style.cssText = `width:10px;height:10px;flex:none;margin-right:4px;border-radius:0;transform:rotate(45deg);background:#ECE6DA;border:1.5px solid #13110F;box-shadow:0 0 0 1px ${c.hasData ? "#F07636" : "rgba(236,230,218,0.75)"};`;
+        (el.firstElementChild as HTMLElement).style.cssText = `width:10px;height:10px;flex:none;margin-right:4px;border-radius:0;transform:rotate(45deg);background:#ECE6DA;border:1.5px solid #13110F;box-shadow:0 0 0 1px ${c.hasData ? "#F2B544" : "rgba(236,230,218,0.75)"};`;
+        if (c.hasData) el.style.color = "#F2B544"; // the cities that have data stand out in the theme's amber, apart from the orange dots
       }
       el.addEventListener("click", () => onSelectRef.current(c));
       layer.appendChild(el);
       return { c, el };
     });
 
+    // Cities are placed from north to south. A label that would crowd one already placed (São Paulo and Rio de Janeiro
+    // sit close together) tries the other side of its marker, then the other side only (a marker never leaves its city).
+    const order = [...items].sort((a, b) => b.c.lat - a.c.lat);
+    const LABEL_H = 18; // a little taller than the text, so labels that nearly touch count as crowding
     const place = () => {
       layer.style.display = map.getZoom() >= DISTRICT_LABEL_ZOOM ? "none" : "";
-      for (const { c, el } of items) {
+      if (marker !== "diamond") {
+        for (const { c, el } of items) {
+          const p = map.latLngToContainerPoint([c.lat, c.lng]);
+          el.style.transform = `translate(${p.x - 4}px, ${p.y}px) translateY(-50%)`;
+        }
+        return;
+      }
+      const taken: { l: number; r: number; t: number; b: number }[] = [];
+      for (const { c, el } of order) {
         const p = map.latLngToContainerPoint([c.lat, c.lng]);
-        el.style.transform = `translate(${p.x - (marker === "diamond" ? 5 : 4)}px, ${p.y}px) translateY(-50%)`;
+        const w = el.offsetWidth || 90;
+        const tries = [[false, 0], [true, 0]] as const;
+        let pick: (typeof tries)[number] = tries[0];
+        for (const t of tries) {
+          const l = t[0] ? p.x + 5 - w : p.x - 5;
+          const y = p.y + t[1];
+          if (!taken.some((q) => l < q.r && l + w > q.l && y - LABEL_H / 2 < q.b && y + LABEL_H / 2 > q.t)) {
+            pick = t;
+            break;
+          }
+        }
+        const [left, dy] = pick;
+        const l = left ? p.x + 5 - w : p.x - 5;
+        taken.push({ l: l - 6, r: l + w, t: p.y + dy - LABEL_H / 2, b: p.y + dy + LABEL_H / 2 });
+        el.style.flexDirection = left ? "row-reverse" : "";
+        (el.firstElementChild as HTMLElement).style.margin = left ? "0 0 0 4px" : "0 4px 0 0";
+        el.style.transform = `translate(${l}px, ${p.y + dy}px) translateY(-50%)`;
       }
     };
 
@@ -357,6 +386,7 @@ interface Line {
 }
 type Level = "adm1" | "adm2";
 const lineCache = new Map<string, Promise<Line[]>>();
+const lineDone = new Map<string, Line[]>(); // the same lines once loaded, so a rebuild can draw them at once
 
 function loadLines(country: Country, level: Level): Promise<Line[]> {
   const key = `${country}-${level}`;
@@ -384,6 +414,7 @@ function loadLines(country: Country, level: Level): Promise<Line[]> {
       lineCache.delete(key); // retry next time instead of caching the failure
       console.error("[map] could not load boundary lines", err);
     });
+    hit.then((l) => lineDone.set(key, l), () => {});
     lineCache.set(key, hit);
   }
   return hit;
@@ -588,6 +619,8 @@ function MapOverlay({ country, detections, palette }: { country: Country; detect
       if (list) list.push(i);
       else byColor.set(color, [i]);
     });
+    const dotAlpha = new Float32Array(dotCount);
+    detections.forEach((o, i) => (dotAlpha[i] = o.opacity ?? 1));
     const redOf = (c: string) => Number(c.match(/\d+/)![0]);
     const batches = [...byColor].sort((a, b) => Math.abs(redOf(a[0]) - palette.core[0]) - Math.abs(redOf(b[0]) - palette.core[0]));
     let occupied = new Uint8Array(0);
@@ -689,8 +722,8 @@ function MapOverlay({ country, detections, palette }: { country: Country; detect
     map.on("mouseout", onLeave);
     document.addEventListener("keydown", onKey);
 
-    let adm1: Line[] = [];
-    let adm2: Line[] = [];
+    let adm1: Line[] = lineDone.get(`${country}-adm1`) ?? [];
+    let adm2: Line[] = lineDone.get(`${country}-adm2`) ?? [];
     let queued = 0;
     const redraw = () => {
       if (!alive) return; // a late tile load must not draw on a map that has been removed
@@ -700,7 +733,7 @@ function MapOverlay({ country, detections, palette }: { country: Country; detect
     let alive = true;
     loadLines(country, "adm1").then((l) => alive && ((adm1 = l), redraw()), () => {});
     // District lines are the big file (Brazil: 2 MB): fetched only once zoomed in far enough to see them.
-    let adm2Requested = false;
+    let adm2Requested = lineDone.has(`${country}-adm2`);
     const wantAdm2 = () => {
       if (adm2Requested || map.getZoom() < base + ADM2_START - 0.3) return;
       adm2Requested = true;
@@ -780,7 +813,11 @@ function MapOverlay({ country, detections, palette }: { country: Country; detect
           const slot = ((y / cell) | 0) * cols + ((x / cell) | 0);
           if (occupied[slot]) continue;
           occupied[slot] = 1;
-          ctx.drawImage(sprite, x - half, y - half, side, side);
+          if (dotAlpha[i] < 1) {
+            ctx.globalAlpha = 0.9 * dotAlpha[i]; // a dot fading in or out
+            ctx.drawImage(sprite, x - half, y - half, side, side);
+            ctx.globalAlpha = 0.9;
+          } else ctx.drawImage(sprite, x - half, y - half, side, side);
         }
       }
       if (hovered && hovered !== picked) {

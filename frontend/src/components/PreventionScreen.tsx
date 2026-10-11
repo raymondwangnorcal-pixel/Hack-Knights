@@ -8,7 +8,7 @@ import { PreventionCard } from "@/components/PreventionCard";
 import { InfoTip } from "@/components/InfoTip";
 import { DETECTIONS_BODY, DETECTIONS_TITLE, RISK_SCORE_BODY, RISK_SCORE_TITLE } from "@/lib/riskHelp";
 import { CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus, type MapView } from "@/lib/cities";
-import { readAutoSpeak, setAutoSpeak, speak as speakLine, subscribeAutoSpeak, unlockAudio } from "@/lib/voice";
+import { readAutoSpeak, setAutoSpeak, speak as speakLine, subscribeAutoSpeak, toggleSpeak, unlockAudio } from "@/lib/voice";
 import { pickSpoken } from "@/lib/spoken";
 import type {
   Country,
@@ -176,10 +176,10 @@ export function PreventionScreen() {
     speakLine(`${place.district}${sep}${spokenTitles.map((t) => t.replace(/[.。!！]+$/, "")).join(sep)}`, voice);
   }, [autoSpeak, canSpeak, shownPlan, spokenTitles, place.country, place.district, language, voice, sep]);
 
+  // The play button: start, pause, or resume the spoken plan.
   function speak() {
     if (!shownPlan || !spokenTitles.length) return;
-    unlockAudio();
-    speakLine(spokenText(spokenTitles), voice);
+    toggleSpeak(spokenText(spokenTitles), voice);
   }
 
   function selectDistrict(next: Place, zoom = true) {

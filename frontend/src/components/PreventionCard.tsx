@@ -1,6 +1,7 @@
 "use client";
 
 import { LANGUAGES } from "@/lib/languages";
+import { useSpeaking } from "@/lib/voice";
 import { pickSpoken } from "@/lib/spoken";
 import type { Language, PreventionResponse } from "@/lib/types";
 
@@ -41,6 +42,7 @@ export function PreventionCard({
   loadingContext = "Checking local mosquito data…",
   loadingFooter = "Preparing advice for your district.",
 }: PreventionCardProps) {
+  const speaking = useSpeaking();
   return (
     <section aria-label={`${title} steps`} className="flex min-w-0 flex-col border border-[#ECE6DA]/20 px-5 pt-6 pb-6 sm:px-8 sm:pt-8">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ECE6DA]/20 pb-5">
@@ -63,11 +65,12 @@ export function PreventionCard({
               </button>
               <button
                 onClick={onSpeak}
-                disabled={!data}
-                aria-label="Read the steps aloud"
+                disabled={!data && !speaking}
+                aria-label={speaking ? "Pause reading" : "Read the steps aloud"}
+                aria-pressed={speaking}
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-[#ECE6DA]/40 hover:border-[#ECE6DA] disabled:opacity-30"
               >
-                <PlayIcon size={13} />
+                {speaking ? <PauseIcon size={13} /> : <PlayIcon size={13} />}
               </button>
             </>
           )}
@@ -143,6 +146,15 @@ export function PlayIcon({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
       <path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" />
+    </svg>
+  );
+}
+
+export function PauseIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <rect x="5" y="4" width="5" height="16" rx="1" />
+      <rect x="14" y="4" width="5" height="16" rx="1" />
     </svg>
   );
 }

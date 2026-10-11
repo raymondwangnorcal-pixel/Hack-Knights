@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import type { Language } from "./types";
 
 // Plays spoken lines from /api/voice on the phone.
@@ -14,10 +15,54 @@ const SILENT =
 
 let player: HTMLAudioElement | null = null;
 let currentUrl: string | null = null;
+let currentKey: string | null = null; // language + text of the line in the player
+
+// Whether a spoken line is playing right now (the silent unlock clip doesn't count), so play
+// buttons can show a pause icon while it speaks.
+const playingListeners = new Set<() => void>();
+const notifyPlaying = () => playingListeners.forEach((l) => l());
 
 function getPlayer(): HTMLAudioElement {
-  if (!player) player = new Audio();
+  if (!player) {
+    player = new Audio();
+    for (const ev of ["play", "playing", "pause", "ended", "emptied"]) player.addEventListener(ev, notifyPlaying);
+  }
   return player;
+}
+
+export function isSpeaking(): boolean {
+  return !!player && !player.paused && !player.ended && player.src !== SILENT;
+}
+
+/** True while a spoken line is playing; re-renders when it starts, pauses or ends. */
+export function useSpeaking(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      playingListeners.add(cb);
+      return () => playingListeners.delete(cb);
+    },
+    isSpeaking,
+    () => false,
+  );
+}
+
+/** The play button: pauses a line that is playing, resumes this line where it was paused, or starts it. */
+export async function toggleSpeak(text: string, language: Language): Promise<boolean> {
+  const p = getPlayer();
+  if (isSpeaking()) {
+    p.pause();
+    return true;
+  }
+  if (currentKey === `${language}|${text}` && currentUrl && p.src === currentUrl && !p.ended && p.currentTime > 0) {
+    try {
+      await p.play();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  unlockAudio(); // inside the tap, so the line can play once it has loaded
+  return speak(text, language);
 }
 
 /** Call inside a tap handler. Makes later play() calls on this page allowed on iOS and Android. */
@@ -59,6 +104,7 @@ export async function speak(text: string, language: Language): Promise<boolean> 
   if (currentUrl) URL.revokeObjectURL(currentUrl);
   currentUrl = URL.createObjectURL(blob);
   p.src = currentUrl;
+  currentKey = `${language}|${text}`;
   try {
     await p.play();
     return true;

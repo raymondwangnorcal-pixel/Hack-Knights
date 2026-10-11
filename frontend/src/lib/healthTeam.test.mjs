@@ -51,7 +51,7 @@ test("West Nile plans target drains and use positive-pool units", () => {
 
 test("the context line names the grounding numbers and flags simulated data", () => {
   const line = healthTeamContextLine({ ...base, regionalGenus: "anopheles", simulated: true });
-  assert.match(line, /Risk 50\/100 · rank 3 of 8 · 20 buzzes \/ 7d · 40 cases \/ 14d · forecast flat · mostly Anopheles · simulated data/);
+  assert.match(line, /Risk score 50 out of 100 · rank 3 of 8 · 20 detections in the last seven days · 40 cases \/ 14d · forecast flat · mostly Anopheles · simulated data/);
 });
 
 test("no forecast means no trend", () => {

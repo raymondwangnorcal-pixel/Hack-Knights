@@ -213,9 +213,9 @@ export function healthTeamCandidates(ctx: HealthTeamContext): PreventionAction[]
 /** One line above the actions: the numbers the plan is grounded on. */
 export function healthTeamContextLine(ctx: HealthTeamContext): string {
   const parts: string[] = [];
-  if (ctx.riskScore !== null) parts.push(`Risk ${ctx.riskScore}/100`);
+  if (ctx.riskScore !== null) parts.push(`Risk score ${ctx.riskScore} out of 100`);
   if (ctx.rank !== null && ctx.districtCount !== null) parts.push(`rank ${ctx.rank} of ${ctx.districtCount}`);
-  if (ctx.detections7d !== null) parts.push(`${ctx.detections7d} buzzes / 7d`);
+  if (ctx.detections7d !== null) parts.push(`${ctx.detections7d} detections in the last seven days`);
   if (ctx.cases14d !== null) parts.push(`${ctx.cases14d} ${ctx.forecast?.unit ?? "cases"} / 14d`);
   const trend = forecastTrend(ctx);
   if (trend) parts.push(`forecast ${trend}`);

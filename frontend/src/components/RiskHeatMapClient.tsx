@@ -1,8 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import { Circle, MapContainer, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import countryShapes from "@/lib/countryShapes.json";
-import { CITIES, type City, type MapFocus } from "@/lib/cities";
+import { CITIES, type City, type MapFocus, type MapView } from "@/lib/cities";
 import type { Country, Detection, DistrictRisk } from "@/lib/types";
 import { DOT_CORE, DOT_EDGE } from "@/lib/dotColors";
 import { DISEASE_LABEL, GENUS_INFO } from "@/lib/species";
@@ -16,6 +16,7 @@ interface RiskHeatMapClientProps {
   onCitySelect: (c: City) => void;
   onSwipe?: (dir: 1 | -1) => void;
   focus?: MapFocus | null;
+  viewRef?: MutableRefObject<MapView | null>;
   height?: number | string;
 }
 
@@ -846,6 +847,28 @@ function FlyToFocus({ focus, country }: { focus?: MapFocus | null; country: Coun
   return null;
 }
 
+// Lets the page read this map's camera or jump it (no animation), to carry a view between two maps.
+function ExposeView({ viewRef }: { viewRef: MutableRefObject<MapView | null> }) {
+  const map = useMap();
+  useEffect(() => {
+    viewRef.current = {
+      get: () => {
+        const c = map.getCenter();
+        return { lat: c.lat, lng: c.lng, zoom: map.getZoom() };
+      },
+      set: (lat, lng, zoom) => {
+        // A view carried over from a smaller map can be further out than this map's own limit.
+        map.setMinZoom(Math.min(map.getMinZoom(), zoom));
+        map.setView([lat, lng], zoom, { animate: false });
+      },
+    };
+    return () => {
+      viewRef.current = null;
+    };
+  }, [map, viewRef]);
+  return null;
+}
+
 export default function RiskHeatMapClient({
   districts,
   detections,
@@ -854,6 +877,7 @@ export default function RiskHeatMapClient({
   onCitySelect,
   onSwipe,
   focus,
+  viewRef,
   height = "100%",
 }: RiskHeatMapClientProps) {
   const country = districts[0].country;
@@ -881,6 +905,7 @@ export default function RiskHeatMapClient({
       <FlyToFocus focus={focus} country={country} />
       <FitToCountry country={country} />
       {onSwipe && <SwipeToChange onSwipe={onSwipe} />}
+      {viewRef && <ExposeView viewRef={viewRef} />}
       {SHOW_DISTRICT_CIRCLES && districts.map((d) => {
         const isSel = d.district === selected;
         return (

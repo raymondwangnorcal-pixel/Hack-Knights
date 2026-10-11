@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { City, MapFocus } from "@/lib/cities";
+import type { MutableRefObject } from "react";
+import type { City, MapFocus, MapView } from "@/lib/cities";
 import type { Detection, DistrictRisk } from "@/lib/types";
 
 const RiskHeatMapClient = dynamic(() => import("./RiskHeatMapClient"), {
@@ -18,6 +19,8 @@ interface RiskHeatMapProps {
   /** Whole-country view only: a sideways drag or swipe asks for the next (+1) or previous (-1) country. */
   onSwipe?: (dir: 1 | -1) => void;
   focus?: MapFocus | null;
+  /** Filled with a handle to read or jump the map's camera (see MapView). */
+  viewRef?: MutableRefObject<MapView | null>;
   /** Map height in px (default: fill the parent). */
   height?: number | string;
 }

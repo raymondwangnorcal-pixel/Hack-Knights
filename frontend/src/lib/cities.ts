@@ -59,3 +59,10 @@ export type MapFocus = { key: number } & (
   | { reset?: false; lat: number; lng: number; zoom: number }
 );
 
+
+// A map camera handle: read the current view, or jump to one without animation (used to carry the view
+// between the home page map and its full-screen version).
+export interface MapView {
+  get(): { lat: number; lng: number; zoom: number };
+  set(lat: number, lng: number, zoom: number): void;
+}

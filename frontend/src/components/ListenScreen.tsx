@@ -840,9 +840,12 @@ function ResultRow({
           <span>High</span>
         </span>
         {district && (
-          <span className="mt-1 text-[13px] leading-snug opacity-75">
-            {district.district}, {city}: {district.cases_14d.toLocaleString()} {DISEASE_LABEL[district.main_disease].toLowerCase()} cases
-            in 14 days, {district.detections_7d} detections in 7 days
+          <span className="mt-1 grid text-[13px] leading-snug opacity-75">
+            <span className="font-medium">{district.district}, {city}</span>
+            <span>{district.detections_7d} mosquitoes heard (last 7 days)</span>
+            <span>
+              {district.cases_14d.toLocaleString()} reported {DISEASE_LABEL[district.main_disease].toLowerCase()} cases (last 14 days)
+            </span>
           </span>
         )}
       </div>

@@ -25,4 +25,7 @@ def make_pool() -> AsyncConnectionPool:
     load_dotenv()
     if missing := missing_settings():
         raise RuntimeError(f"Tiger Data settings missing: {', '.join(missing)}")
-    return AsyncConnectionPool(conninfo="connect_timeout=15", min_size=1, max_size=5, open=False)
+    # Tiger closes idle connections; check each one on checkout and retire idle ones early, so a request
+    # never gets a dead connection (seen as "server closed the connection unexpectedly").
+    return AsyncConnectionPool(conninfo="connect_timeout=15", min_size=1, max_size=5, open=False,
+                               check=AsyncConnectionPool.check_connection, max_idle=120, max_lifetime=900)

@@ -3,7 +3,7 @@
     .venv/bin/uvicorn app.main:app --app-dir backend --port 8000
 
 Write: POST /classify.  Reads for the dashboard: GET /districts /detections /risk /forecast /timeline,
-and GET /stream (Server-Sent Events, one event per new real-time detection, relayed from Postgres NOTIFY).
+GET /density (simulated suitability grid), and GET /stream (Server-Sent Events, one event per new real-time detection, relayed from Postgres NOTIFY).
 """
 import asyncio
 import json
@@ -118,14 +118,15 @@ async def get_districts(country: str | None = None, geojson: bool = False):
 @app.get("/detections")
 async def get_detections(country: str | None = None, since: datetime | None = None,
                          limit: int = Query(5000, le=20000)):
-    """Mosquito detections for the map and time slider (newest first). Default: last 7 days."""
+    """Mosquito detections for the map and time slider (newest first). Default: last 7 days.
+    Detections outside our districts carry their own lat/lng and a "near <city>" region."""
     _country(country)
     since = since or datetime.now(timezone.utc) - timedelta(days=7)
     rows = await _rows("""
-        SELECT d.time, d.detection_id, d.country, d.district_id, s.name AS district_name,
-               s.centroid_lat AS lat, s.centroid_lon AS lon, d.genus, d.species, d.confidence,
-               d.diseases, d.source, d.is_simulated
-        FROM detections d JOIN districts s USING (district_id)
+        SELECT d.time, d.detection_id, d.country, d.district_id, coalesce(s.name, d.region) AS district_name,
+               coalesce(d.lat, s.centroid_lat) AS lat, coalesce(d.lng, s.centroid_lon) AS lon, d.genus, d.species,
+               d.confidence, d.diseases, d.source, d.is_simulated
+        FROM detections d LEFT JOIN districts s USING (district_id)
         WHERE d.is_mosquito AND d.time >= %(since)s AND (%(c)s::text IS NULL OR d.country = %(c)s::text)
         ORDER BY d.time DESC LIMIT %(limit)s""", {"since": since, "c": country, "limit": limit})
     return {"since": since, "count": len(rows), "detections": rows}
@@ -192,6 +193,22 @@ async def get_timeline(country: str = Query(...), weeks: int = Query(12, ge=1, l
         LEFT JOIN cas ON cas.week = w.week AND cas.district_id = s.district_id
         WHERE s.country = %(c)s ORDER BY w.week, s.name""", {"c": country, "w": weeks})
     return {"country": country, "weeks": weeks, "rows": rows}
+
+
+@app.get("/density")
+async def get_density(country: str = Query(...)):
+    """Simulated mosquito-suitability grid for the whole-country map layer (0-100 index per cell).
+    Compact arrays: cells = [[lat, lng, value], ...]; extra factors are returned for the hover tooltip."""
+    _country(country)
+    rows = await _rows("""SELECT lat, lng, value, temp_warm_c, rain_mm_yr, water_km, elev_m, in_lake, cell_deg
+                          FROM density_cells WHERE country = %(c)s ORDER BY lat, lng""", {"c": country})
+    if not rows:
+        raise HTTPException(404, f"no density grid for {country}: run scripts/build_density.py")
+    return {"country": country, "cell_deg": rows[0]["cell_deg"], "is_simulated": True,
+            "legend": "Simulated mosquito-suitability index: 0 = unsuitable, 100 = ideal breeding conditions",
+            "cells": [[round(r["lat"], 4), round(r["lng"], 4), round(r["value"], 1)] for r in rows],
+            "factors": [[round(r["temp_warm_c"], 1), round(r["rain_mm_yr"]), round(r["water_km"]), round(r["elev_m"]),
+                         bool(r["in_lake"])] for r in rows]}
 
 
 @app.get("/stream")

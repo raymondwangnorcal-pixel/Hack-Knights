@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Spectrogram } from "@/components/Spectrogram";
 import classifyMock from "@/mocks/classify.json";
 import { WakeGate, listMics, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
-import { readAutoSpeak, setAutoSpeak, speak as speakLine, stopSpeaking, subscribeAutoSpeak, unlockAudio } from "@/lib/voice";
+import { readAutoSpeak, setAutoSpeak, speak as speakLine, stopSpeaking, subscribeAutoSpeak, toggleSpeak, unlockAudio, useSpeaking } from "@/lib/voice";
 import { LANGUAGES } from "@/lib/languages";
 import { pickSpoken } from "@/lib/spoken";
 import { DISEASE_LABEL, GENUS_INFO, carryInfo, listOr } from "@/lib/species";
@@ -394,12 +394,13 @@ export function ListenScreen() {
     speakLine(spokenLine(result, spokenTitles, voice), voice);
   }, [autoSpeak, canSpeak, shownPrevention, result, voice, spokenTitles]);
 
+  const speaking = useSpeaking();
+  // The play button: start, pause, or resume the spoken steps.
   function speak() {
     if (!shownPrevention || !spokenTitles.length) return;
-    unlockAudio();
     // With a result: species + actions; before one: just the district's actions.
     const text = result?.is_mosquito ? spokenLine(result, spokenTitles, voice) : spokenTitles.join(voice === "zh" ? "。" : ". ");
-    speakLine(text, voice);
+    toggleSpeak(text, voice);
   }
 
   const district = risk[place.country].find((d) => d.district === place.district) ?? null;
@@ -621,11 +622,12 @@ export function ListenScreen() {
                 </button>
                 <button
                   onClick={speak}
-                  disabled={!shownPrevention}
-                  aria-label="Read the steps aloud"
+                  disabled={!shownPrevention && !speaking}
+                  aria-label={speaking ? "Pause reading" : "Read the steps aloud"}
+                  aria-pressed={speaking}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-[#ECE6DA]/40 hover:border-[#ECE6DA] disabled:opacity-30"
                 >
-                  <PlayIcon size={13} />
+                  {speaking ? <PauseIcon size={13} /> : <PlayIcon size={13} />}
                 </button>
               </>
             )}

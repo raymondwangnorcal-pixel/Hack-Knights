@@ -58,3 +58,11 @@ test("the context line names the grounding numbers briefly, without a simulated-
 test("no forecast means no trend", () => {
   assert.equal(forecastTrend({ forecast: null }), null);
 });
+
+test("the Action plan gets one labeled cell per number, and no Reported cell for zero cases", async () => {
+  const { healthTeamStats } = await import("./healthTeam.ts");
+  const cells = healthTeamStats({ ...base, regionalGenus: "anopheles" });
+  assert.deepEqual(cells.map((c) => c.label), ["Risk", "Rank", "Detections", "Reported", "Cases", "Mosquito"]);
+  assert.equal(cells.find((c) => c.label === "Rank").value, "#3 of 8");
+  assert.ok(!healthTeamStats({ ...base, cases14d: 0 }).some((c) => c.label === "Reported"));
+});

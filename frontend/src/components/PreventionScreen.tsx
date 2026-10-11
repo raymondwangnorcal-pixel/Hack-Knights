@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import RiskHeatMap from "@/components/RiskHeatMap";
 import FullscreenMap, { type FullscreenResult } from "@/components/FullscreenMap";
@@ -9,8 +9,8 @@ import { InfoTip } from "@/components/InfoTip";
 import { ORANGE_DOTS } from "@/lib/dotColors";
 import { DETECTIONS_BODY, DETECTIONS_TITLE, RISK_SCORE_BODY, RISK_SCORE_TITLE } from "@/lib/riskHelp";
 import { CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus, type MapView } from "@/lib/cities";
-import { readAutoSpeak, setAutoSpeak, speak as speakLine, subscribeAutoSpeak, toggleSpeak, unlockAudio } from "@/lib/voice";
-import { pickSpoken } from "@/lib/spoken";
+import { toggleSpeak } from "@/lib/voice";
+import { pickSpokenFull } from "@/lib/spoken";
 import type {
   Country,
   DetectionsResponse,
@@ -64,9 +64,6 @@ export function PreventionScreen() {
   // Keyed by place and language so a stale plan never shows after a switch.
   const [plan, setPlan] = useState<{ key: string; data: PreventionResponse } | null>(null);
   const [planRefresh, setPlanRefresh] = useState(0);
-  const autoSpeak = useSyncExternalStore(subscribeAutoSpeak, readAutoSpeak, () => true);
-  const picked = useRef(false); // the viewer has chosen a district, so a plan may be read aloud
-  const spokenFor = useRef<string | null>(null);
   const focusKey = useRef(0); // each map move request gets a new key, so FlyToFocus fires once
   // Full screen: the overlay grows out of the map box, and the two maps hand their camera to each other.
   const mapBoxRef = useRef<HTMLDivElement>(null);
@@ -161,31 +158,18 @@ export function PreventionScreen() {
 
   const shownPlan = plan?.key === planKey ? plan.data : null;
   // Titles in the chosen language are read in its voice; untranslated ones in the English voice.
-  const spoken = useMemo(() => (shownPlan ? pickSpoken(shownPlan, language) : null), [shownPlan, language]);
+  // The play button reads the whole plan (titles and reasons); nothing plays until it is pressed.
+  const spoken = useMemo(() => (shownPlan ? pickSpokenFull(shownPlan, language) : null), [shownPlan, language]);
   const voice = spoken?.voice ?? language;
-  const spokenTitles = useMemo(() => spoken?.titles ?? [], [spoken]);
   const canSpeak = voiced.includes(voice);
-  const sep = voice === "zh" || voice === "yue" ? "。" : ". ";
-  const spokenText = (titles: string[]) => `${place.district}${sep}${titles.map((t) => t.replace(/[.。!！]+$/, "")).join(sep)}`;
 
-  // Read a plan aloud once per district and language, only after the viewer picked a district.
-  useEffect(() => {
-    if (!picked.current || !autoSpeak || !canSpeak || !shownPlan || !spokenTitles.length) return;
-    const id = `${place.country}:${place.district}:${language}`;
-    if (spokenFor.current === id) return;
-    spokenFor.current = id;
-    speakLine(`${place.district}${sep}${spokenTitles.map((t) => t.replace(/[.。!！]+$/, "")).join(sep)}`, voice);
-  }, [autoSpeak, canSpeak, shownPlan, spokenTitles, place.country, place.district, language, voice, sep]);
-
-  // The play button: start, pause, or resume the spoken plan.
   function speak() {
-    if (!shownPlan || !spokenTitles.length) return;
-    toggleSpeak(spokenText(spokenTitles), voice);
+    if (!spoken?.lines.length) return;
+    const stop = voice === "zh" || voice === "yue" ? "。" : ". ";
+    toggleSpeak(`${place.district}${stop}${spoken.lines.join(" ")}`, voice);
   }
 
   function selectDistrict(next: Place, zoom = true) {
-    unlockAudio(); // inside the tap, so the plan can speak when it arrives
-    picked.current = true;
     setChosen(next);
     setCityNote(null);
     const d = risk[next.country]?.districts.find((x) => x.district === next.district);
@@ -407,9 +391,8 @@ export function PreventionScreen() {
           language={language}
           onLanguage={setLanguage}
           canSpeak={canSpeak}
-          autoSpeak={autoSpeak}
-          onAutoSpeak={setAutoSpeak}
           onSpeak={speak}
+          expanded
           contextPrefix={place.district}
           loadingContext="Checking the district's numbers…"
           loadingFooter="Preparing a plan for this district."

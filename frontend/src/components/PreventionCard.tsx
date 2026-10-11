@@ -2,7 +2,7 @@
 
 import { LANGUAGES } from "@/lib/languages";
 import { useSpeaking } from "@/lib/voice";
-import { pickSpoken } from "@/lib/spoken";
+import { pickSpoken, pickSpokenFull } from "@/lib/spoken";
 import type { Language, PreventionResponse } from "@/lib/types";
 
 // The Prevention card in the poster palette: header with voice and language controls, a one-line
@@ -13,6 +13,7 @@ import type { Language, PreventionResponse } from "@/lib/types";
 const ORANGE = "#F07636";
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 const COND = { fontFamily: "'Roboto Condensed', var(--font-geist-sans), sans-serif" };
+const MONO = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 
 interface PreventionCardProps {
   title?: string;
@@ -20,9 +21,9 @@ interface PreventionCardProps {
   language: Language;
   onLanguage: (l: Language) => void;
   canSpeak: boolean;
-  autoSpeak: boolean;
-  onAutoSpeak: (on: boolean) => void;
   onSpeak: () => void;
+  /** Show every action's reason without a tap (the Action plan). */
+  expanded?: boolean;
   /** Shown before the evidence line, e.g. the district name. */
   contextPrefix?: string;
   loadingContext?: string;
@@ -35,9 +36,8 @@ export function PreventionCard({
   language,
   onLanguage,
   canSpeak,
-  autoSpeak,
-  onAutoSpeak,
   onSpeak,
+  expanded = false,
   contextPrefix,
   loadingContext = "Checking local mosquito data…",
   loadingFooter = "Preparing advice for your district.",
@@ -52,17 +52,6 @@ export function PreventionCard({
         <div className="flex items-center gap-3">
           {canSpeak && (
             <>
-              <button
-                onClick={() => onAutoSpeak(!autoSpeak)}
-                aria-pressed={autoSpeak}
-                aria-label={autoSpeak ? "Auto-speak on: tap to mute" : "Auto-speak off: tap to turn on"}
-                title={autoSpeak ? "Plans are read aloud. Tap to mute." : "Muted. Tap to read plans aloud."}
-                className="flex h-9 items-center gap-2 rounded-full border border-[#ECE6DA]/30 px-3 text-[14px] hover:border-[#ECE6DA]"
-                style={COND}
-              >
-                {autoSpeak ? <SpeakerIcon /> : <SpeakerOffIcon />}
-                <span className="max-sm:hidden">{autoSpeak ? "Auto" : "Muted"}</span>
-              </button>
               <button
                 onClick={onSpeak}
                 disabled={!data && !speaking}
@@ -93,11 +82,34 @@ export function PreventionCard({
         </div>
       </div>
 
-      <p className="border-b border-[#ECE6DA]/20 py-3 text-[14px] leading-snug opacity-70" style={COND} aria-label="Evidence">
-        {data
-          ? `${contextPrefix ? `${contextPrefix} · ` : ""}${data.context}${data.basis === "general" ? " · General guidance" : ""}`
-          : loadingContext}
-      </p>
+      {data?.stats?.length ? (
+        // The numbers behind the plan, one labeled cell each, so they read at a glance.
+        <div className="border-b border-[#ECE6DA]/20 py-4" aria-label="Evidence">
+          {contextPrefix && (
+            <p className="mb-3 text-[13px] tracking-[0.18em] uppercase" style={{ ...MONO, color: ORANGE }}>
+              {contextPrefix}
+            </p>
+          )}
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+            {data.stats.map((s) => (
+              <div key={s.label} className="min-w-0">
+                <dt className="text-[10px] tracking-[0.16em] uppercase opacity-55" style={MONO}>
+                  {s.label}
+                </dt>
+                <dd className="m-0 mt-0.5 text-[17px] leading-tight" style={COND}>
+                  {s.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : (
+        <p className="border-b border-[#ECE6DA]/20 py-3 text-[14px] leading-snug opacity-70" style={COND} aria-label="Evidence">
+          {data
+            ? `${contextPrefix ? `${contextPrefix} · ` : ""}${data.context}${data.basis === "general" ? " · General guidance" : ""}`
+            : loadingContext}
+        </p>
+      )}
 
       <ol className="flex flex-col" lang={data?.language ?? "en"}>
         {(data?.actions ?? [null, null, null]).map((item, i) => (
@@ -107,7 +119,7 @@ export function PreventionCard({
             </span>
             <span className="h-14 w-px flex-none bg-[#ECE6DA]/20" />
             {item ? (
-              <details className="group min-w-0 flex-1" lang={item.language ?? data?.language ?? "en"}>
+              <details className="group min-w-0 flex-1" open={expanded} lang={item.language ?? data?.language ?? "en"}>
                 <summary
                   className="flex cursor-pointer list-none items-start justify-between gap-3 text-[22px] leading-tight font-light sm:text-[27px] [&::-webkit-details-marker]:hidden"
                   style={COND}
@@ -135,7 +147,7 @@ export function PreventionCard({
         {!data
           ? loadingFooter
           : `By Gemini${
-              !pickSpoken(data, language).translated ? " · Translation unavailable, showing English" : ""
+              !(expanded ? pickSpokenFull(data, language) : pickSpoken(data, language)).translated ? " · Translation unavailable, showing English" : ""
             }`}
       </p>
     </section>
@@ -155,24 +167,6 @@ export function PauseIcon({ size }: { size: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
       <rect x="5" y="4" width="5" height="16" rx="1" />
       <rect x="14" y="4" width="5" height="16" rx="1" />
-    </svg>
-  );
-}
-
-function SpeakerOffIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
-      <path d="M17 9.5l5 5M22 9.5l-5 5" />
-    </svg>
-  );
-}
-
-function SpeakerIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
-      <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />
     </svg>
   );
 }

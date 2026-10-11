@@ -1,7 +1,7 @@
 import { USE_MOCKS, mockForecast, mockRisk } from "@/lib/mockData";
 import { districtsById, getDetections, getForecast, getRisk } from "@/lib/backend";
 import { gatherPreventionContext, householdCandidates, preventionContextLine, type PreventionContext } from "@/lib/prevention";
-import { healthTeamCandidates, healthTeamContextLine, type HealthTeamContext } from "@/lib/healthTeam";
+import { healthTeamCandidates, healthTeamContextLine, healthTeamStats, type HealthTeamContext } from "@/lib/healthTeam";
 import { buildHealthTeamPrompt } from "@/lib/healthTeamPrompt";
 import { withBuiltinTitles } from "@/lib/actionTranslations";
 import { parseLanguage, promptName } from "@/lib/languages";
@@ -291,6 +291,7 @@ async function healthTeamPlan(body: PreventionRequest): Promise<Response> {
     source: chosen ? "gemini" : "rules",
     basis: "local",
     context: healthTeamContextLine(ctx),
+    stats: healthTeamStats(ctx),
     language: chosen ? language : fallback!.language,
     is_simulated: ctx.simulated,
   };

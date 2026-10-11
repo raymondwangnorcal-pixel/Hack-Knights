@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Spectrogram } from "@/components/Spectrogram";
 import classifyMock from "@/mocks/classify.json";
 import { WakeGate, listMics, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
-import { readAutoSpeak, setAutoSpeak, speak as speakLine, stopSpeaking, subscribeAutoSpeak, toggleSpeak, unlockAudio, useSpeaking } from "@/lib/voice";
+import { stopSpeaking, toggleSpeak, unlockAudio, useSpeaking } from "@/lib/voice";
 import { LANGUAGES } from "@/lib/languages";
 import { pickSpoken } from "@/lib/spoken";
 import { DISEASE_LABEL, GENUS_INFO, carryInfo, listOr } from "@/lib/species";
@@ -126,8 +126,6 @@ export function ListenScreen() {
   const startedAt = useRef(0);
   const run = useRef(0); // bumps on every start/stop so stale async work drops its result
   const replay = useRef<HTMLAudioElement | null>(null);
-  const spokenFor = useRef<string | null>(null); // detection already read aloud
-  const autoSpeak = useSyncExternalStore(subscribeAutoSpeak, readAutoSpeak, () => true);
 
   // District list + risk for both cities (the picker needs both).
   useEffect(() => {
@@ -384,14 +382,6 @@ export function ListenScreen() {
   const spokenTitles = useMemo(() => spoken?.titles ?? [], [spoken]);
   const canSpeak = voiced.includes(voice);
 
-  // Read the result aloud once per detection, as soon as its prevention actions are in.
-  useEffect(() => {
-    if (!autoSpeak || !canSpeak || !shownPrevention || !result?.is_mosquito || !spokenTitles.length) return;
-    if (spokenFor.current === result.detection_id) return;
-    spokenFor.current = result.detection_id;
-    speakLine(spokenLine(result, spokenTitles, voice), voice);
-  }, [autoSpeak, canSpeak, shownPrevention, result, voice, spokenTitles]);
-
   const speaking = useSpeaking();
   // The play button: start, pause, or resume the spoken steps.
   function speak() {
@@ -607,17 +597,6 @@ export function ListenScreen() {
           <div className="flex items-center gap-3">
             {canSpeak && (
               <>
-                <button
-                  onClick={() => setAutoSpeak(!autoSpeak)}
-                  aria-pressed={autoSpeak}
-                  aria-label={autoSpeak ? "Auto-speak on: tap to mute" : "Auto-speak off: tap to turn on"}
-                  title={autoSpeak ? "Results are read aloud. Tap to mute." : "Muted. Tap to read results aloud."}
-                  className="flex h-9 items-center gap-2 rounded-full border border-[#ECE6DA]/30 px-3 text-[14px] hover:border-[#ECE6DA]"
-                  style={COND}
-                >
-                  {autoSpeak ? <SpeakerIcon /> : <SpeakerOffIcon />}
-                  <span className="max-sm:hidden">{autoSpeak ? "Auto" : "Muted"}</span>
-                </button>
                 <button
                   onClick={speak}
                   disabled={!shownPrevention && !speaking}
@@ -948,21 +927,4 @@ function WaveIcon() {
 }
 function RecIcon() {
   return <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: RED }} aria-hidden="true" />;
-}
-function SpeakerOffIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
-      <path d="M17 9.5l5 5M22 9.5l-5 5" />
-    </svg>
-  );
-}
-
-function SpeakerIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
-      <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />
-    </svg>
-  );
 }

@@ -215,6 +215,20 @@ export function healthTeamCandidates(ctx: HealthTeamContext): PreventionAction[]
   return list;
 }
 
+/** The numbers behind the plan as labeled cells for the Action plan card. */
+export function healthTeamStats(ctx: HealthTeamContext): { label: string; value: string }[] {
+  const cells: { label: string; value: string }[] = [];
+  if (ctx.riskScore !== null) cells.push({ label: "Risk", value: `${ctx.riskScore}/100` });
+  if (ctx.rank !== null && ctx.districtCount !== null) cells.push({ label: "Rank", value: `#${ctx.rank} of ${ctx.districtCount}` });
+  if (ctx.detections7d !== null) cells.push({ label: "Detections", value: `${ctx.detections7d} in 7 days` });
+  // Zero usually means no case reports for the district yet, not zero cases, so it is left out.
+  if (ctx.cases14d) cells.push({ label: "Reported", value: `${ctx.cases14d} ${ctx.forecast?.unit ?? "cases"} in 14 days` });
+  const trend = forecastTrend(ctx);
+  if (trend) cells.push({ label: "Cases", value: trend === "rising" ? "Rising" : trend === "falling" ? "Falling" : "Steady" });
+  if (ctx.regionalGenus) cells.push({ label: "Mosquito", value: `Mostly ${genusName(ctx.regionalGenus)}` });
+  return cells;
+}
+
 /** One short line above the actions: the numbers the plan is grounded on,
  *  e.g. "Risk 70/100 · #1 of 20 · 42 detections in 7 days · Cases rising · Mostly Anopheles". */
 export function healthTeamContextLine(ctx: HealthTeamContext): string {

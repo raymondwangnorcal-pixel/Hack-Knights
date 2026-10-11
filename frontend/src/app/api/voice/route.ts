@@ -10,7 +10,7 @@ import type { Language, VoiceLanguagesResponse, VoiceRequest } from "@/lib/types
 // A language is spoken only when it has its own voice ID, e.g. ELEVENLABS_VOICE_EN. Yoruba and
 // Cantonese have no ElevenLabs model, so they stay unset and text-only (see docs/decisions.md).
 
-const MAX_CHARS = 600; // a spoken result is ~200 characters; this caps any one request's credit cost
+const MAX_CHARS = 1500; // a full action plan with reasons is ~900 characters; this caps any one request's credit cost
 
 function voiceFor(language: Language) {
   return process.env[`ELEVENLABS_VOICE_${language.toUpperCase()}`];

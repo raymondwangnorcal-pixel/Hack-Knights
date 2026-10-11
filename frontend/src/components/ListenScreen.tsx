@@ -143,7 +143,7 @@ export function ListenScreen() {
     if (!active) return;
     const id = setInterval(() => {
       setElapsed((performance.now() - startedAt.current) / 1000);
-      setLevel(frame.current?.bandRatio ?? 0);
+      setLevel(frame.current?.progress ?? 0); // how close the wake gate is to firing
     }, 200);
     return () => clearInterval(id);
   }, [active]);
@@ -670,7 +670,7 @@ function Status({ stage, level, countdown }: { stage: Stage; level: number; coun
       </span>
       {label}
       {stage === "listening" && (
-        // How much of what the mic hears sits in the wingbeat band
+        // Fills as the wake gate hears a steady wingbeat tone; full = capture starts
         <span className="flex h-4 items-end gap-[3px]" aria-hidden="true">
           {[0.15, 0.3, 0.45, 0.6, 0.75].map((t) => (
             <span

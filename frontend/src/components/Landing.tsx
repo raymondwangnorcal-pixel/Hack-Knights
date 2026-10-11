@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Intro } from "@/components/Intro";
 import { ListenScreen } from "@/components/ListenScreen";
@@ -107,19 +107,49 @@ function YouSide() {
   );
 }
 
+/** Plays the For prevention fill-in (see .pv in globals.css) once the side is on screen, then
+ *  leaves it static. The side mounts on each switch to "For prevention", so each switch replays it. */
+function usePreventionEntrance() {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let done: ReturnType<typeof setTimeout> | undefined;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (!e.isIntersecting) return;
+        io.disconnect();
+        el.classList.add("pv-play");
+        done = setTimeout(() => el.classList.add("pv-done"), 2800);
+      },
+      { threshold: 0.15 },
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      clearTimeout(done);
+    };
+  }, []);
+  return ref;
+}
+
 function PreventionSide() {
   // Governments and nonprofits: live risk map, health-team actions and the forecast (was /dashboard),
   // then the sponsors section, which only appears when the "To sponsors" arrow (or the header's
   // Sponsors tab) is pressed, so the page ends at the arrow until then.
+  const ref = usePreventionEntrance();
   return (
     <main
+      ref={ref}
       id="start"
-      className="flex min-h-[calc(100svh-52px)] flex-1 scroll-mt-[86px] flex-col gap-4 px-3 pt-3 pb-3 lg:scroll-mt-[52px] sm:px-3"
+      className="pv flex min-h-[calc(100svh-52px)] flex-1 scroll-mt-[86px] flex-col gap-4 px-3 pt-3 pb-3 lg:scroll-mt-[52px] sm:px-3"
       style={{ backgroundColor: POSTER_BG, color: POSTER_INK, colorScheme: "dark" }}
     >
       <div className="flex min-h-[calc(100svh-52px-24px)] flex-col gap-4">
         <PreventionScreen />
-        <ToSponsorsArrow />
+        <div data-pv="up" style={{ "--pv-d": "1500ms" } as React.CSSProperties}>
+          <ToSponsorsArrow />
+        </div>
       </div>
       <SponsorGate />
     </main>

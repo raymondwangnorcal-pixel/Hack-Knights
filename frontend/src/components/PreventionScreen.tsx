@@ -43,6 +43,8 @@ const DOT_DAYS = 7;
 
 type Place = { country: Country; district: string };
 
+/** Start delay for one piece of the page's fill-in animation (see .pv in globals.css). */
+const pvDelay = (ms: number) => ({ "--pv-d": `${ms}ms` }) as React.CSSProperties;
 const byRank = (ds: DistrictRisk[]) => [...ds].sort((a, b) => a.rank - b.rank);
 
 function fetchRisk(c: Country): Promise<RiskResponse | null> {
@@ -209,7 +211,7 @@ export function PreventionScreen() {
     <div className="flex flex-1 flex-col gap-3">
       <div className="grid flex-1 gap-3 lg:grid-cols-[minmax(0,1.62fr)_minmax(0,1fr)]">
         {/* ---------- Map card ---------- */}
-        <section aria-label="Live risk map" className="flex min-w-0 flex-col border border-[#ECE6DA]/20 px-4 pt-4 pb-5 sm:px-7 sm:pt-6">
+        <section aria-label="Live risk map" data-pv="up" className="flex min-w-0 flex-col border border-[#ECE6DA]/20 px-4 pt-4 pb-5 sm:px-7 sm:pt-6">
           {/* Header: state · place · country tabs */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[#ECE6DA]/20 pb-4 sm:pb-5">
             <span className="flex items-center gap-2.5 text-[22px] leading-none tracking-[0.18em] uppercase sm:text-[26px]" style={{ ...DISPLAY, color: ORANGE }}>
@@ -266,7 +268,7 @@ export function PreventionScreen() {
 
           {/* Map */}
           {/* isolate: keeps the map's own layers (z-index up to 1000) below the sticky page header. */}
-          <div ref={mapBoxRef} className="relative isolate mt-5">
+          <div ref={mapBoxRef} data-pv="reveal" style={pvDelay(150)} className="relative isolate mt-5">
             {countryRisk ? (
               <RiskHeatMap
                 districts={countryRisk.districts}
@@ -315,7 +317,7 @@ export function PreventionScreen() {
           </div>
 
           {/* Ranked districts */}
-          <div className="mt-5 border-t border-[#ECE6DA]/20 pt-4">
+          <div className="mt-5 border-t border-[#ECE6DA]/20 pt-4" data-pv="up" style={pvDelay(450)}>
             <span className="text-[11px] tracking-[0.18em] uppercase opacity-55" style={MONO}>
               Districts by risk · {CITY[country]}
             </span>
@@ -351,10 +353,10 @@ export function PreventionScreen() {
               </div>
             )}
             <ol className="grid gap-x-6 sm:grid-cols-2">
-              {districts.map((d) => {
+              {districts.map((d, i) => {
                 const active = d.district === place.district;
                 return (
-                  <li key={d.district}>
+                  <li key={d.district} data-pv="up" style={pvDelay(550 + i * 35)}>
                     <button
                       onClick={() => selectDistrict({ country, district: d.district })}
                       aria-current={active ? "true" : undefined}
@@ -368,7 +370,11 @@ export function PreventionScreen() {
                         {d.district}
                       </span>
                       <span className="hidden h-1 w-14 flex-none bg-[#ECE6DA]/15 sm:block" aria-hidden="true">
-                        <span className="block h-full" style={{ width: `${d.risk_score}%`, backgroundColor: d.risk_score >= 70 ? RED : ORANGE }} />
+                        <span
+                          className="block h-full"
+                          data-pv="bar"
+                          style={{ ...pvDelay(750 + i * 35), width: `${d.risk_score}%`, backgroundColor: d.risk_score >= 70 ? RED : ORANGE }}
+                        />
                       </span>
                       <span className="w-[76px] flex-none text-right text-[13px] tabular-nums" style={MONO}>
                         {d.risk_score}

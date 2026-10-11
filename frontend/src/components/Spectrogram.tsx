@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 
 // Live spectrogram for the listening screen. It sweeps left to right across one clip's length,
-// drawing whatever `source` hears (the mic, or a sample clip as it plays), so a 10 s capture
+// drawing whatever `source` hears (the mic, or a sample clip as it plays), so a full capture
 // fills the panel exactly. Frequency runs 100 Hz → 2.4 kHz bottom to top: the wingbeat
 // fundamental (a few hundred Hz) and its harmonics show up as bright horizontal bands.
 // With no source the last picture stays frozen; `epoch` changes clear it and restart the sweep.

@@ -3,6 +3,7 @@ import { districtsById, getDetections, getForecast, getRisk } from "@/lib/backen
 import { gatherPreventionContext, householdCandidates, preventionContextLine, type PreventionContext } from "@/lib/prevention";
 import { healthTeamCandidates, healthTeamContextLine, type HealthTeamContext } from "@/lib/healthTeam";
 import { buildHealthTeamPrompt } from "@/lib/healthTeamPrompt";
+import { withBuiltinTitles } from "@/lib/actionTranslations";
 import { parseLanguage, promptName } from "@/lib/languages";
 import type {
   Country, Detection, DetectionsResponse, ForecastResponse, Genus, Language, PreventionAction, PreventionRequest,
@@ -283,12 +284,14 @@ async function healthTeamPlan(body: PreventionRequest): Promise<Response> {
   const candidates = healthTeamCandidates(ctx);
   const language = parseLanguage(body.language);
   const chosen = await chooseHealthTeamWithGemini(candidates, ctx, language);
+  // Without Gemini, titles still come back translated from the built-in table.
+  const fallback = chosen ? null : withBuiltinTitles(candidates.slice(0, 3), language);
   const response: PreventionResponse = {
-    actions: chosen ?? candidates.slice(0, 3),
+    actions: chosen ?? fallback!.actions,
     source: chosen ? "gemini" : "rules",
     basis: "local",
     context: healthTeamContextLine(ctx),
-    language: chosen ? language : "en",
+    language: chosen ? language : fallback!.language,
     is_simulated: ctx.simulated,
   };
   return Response.json(response);
@@ -318,12 +321,14 @@ export async function POST(request: Request) {
   const candidates = householdCandidates(ctx);
   const requestedLanguage = parseLanguage(body.language);
   const chosen = await chooseWithGemini(candidates, ctx, requestedLanguage);
+  // Without Gemini, titles still come back translated from the built-in table.
+  const fallback = chosen ? null : withBuiltinTitles(candidates.slice(0, 3), requestedLanguage);
   const response: PreventionResponse = {
-    actions: chosen ?? candidates.slice(0, 3),
+    actions: chosen ?? fallback!.actions,
     source: chosen ? "gemini" : "rules",
     basis: ctx.recordingGenus || ctx.regionalGenus ? "local" : "general",
     context: preventionContextLine(ctx),
-    language: chosen ? requestedLanguage : "en",
+    language: chosen ? requestedLanguage : fallback!.language,
   };
   return Response.json(response);
 }

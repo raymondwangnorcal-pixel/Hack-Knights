@@ -7,6 +7,7 @@ import { PreventionCard } from "@/components/PreventionCard";
 import { CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus } from "@/lib/cities";
 import { DISEASE_LABEL } from "@/lib/species";
 import { readAutoSpeak, setAutoSpeak, speak as speakLine, subscribeAutoSpeak, unlockAudio } from "@/lib/voice";
+import { pickSpoken } from "@/lib/spoken";
 import type {
   Country,
   DetectionsResponse,
@@ -164,12 +165,12 @@ export function PreventionScreen() {
   }, [place.country, place.district, language, planKey]);
 
   const shownPlan = plan?.key === planKey ? plan.data : null;
-  const canSpeak = voiced.includes(language);
-  const spokenTitles = useMemo(
-    () => (shownPlan ? shownPlan.actions.filter((a) => !a.language || a.language === language).map((a) => a.title) : []),
-    [shownPlan, language],
-  );
-  const sep = language === "zh" || language === "yue" ? "。" : ". ";
+  // Titles in the chosen language are read in its voice; untranslated ones in the English voice.
+  const spoken = useMemo(() => (shownPlan ? pickSpoken(shownPlan, language) : null), [shownPlan, language]);
+  const voice = spoken?.voice ?? language;
+  const spokenTitles = useMemo(() => spoken?.titles ?? [], [spoken]);
+  const canSpeak = voiced.includes(voice);
+  const sep = voice === "zh" || voice === "yue" ? "。" : ". ";
   const spokenText = (titles: string[]) => `${place.district}${sep}${titles.map((t) => t.replace(/[.。!！]+$/, "")).join(sep)}`;
 
   // Read a plan aloud once per district and language, only after the viewer picked a district.
@@ -178,13 +179,13 @@ export function PreventionScreen() {
     const id = `${place.country}:${place.district}:${language}`;
     if (spokenFor.current === id) return;
     spokenFor.current = id;
-    speakLine(`${place.district}${sep}${spokenTitles.map((t) => t.replace(/[.。!！]+$/, "")).join(sep)}`, language);
-  }, [autoSpeak, canSpeak, shownPlan, spokenTitles, place.country, place.district, language, sep]);
+    speakLine(`${place.district}${sep}${spokenTitles.map((t) => t.replace(/[.。!！]+$/, "")).join(sep)}`, voice);
+  }, [autoSpeak, canSpeak, shownPlan, spokenTitles, place.country, place.district, language, voice, sep]);
 
   function speak() {
     if (!shownPlan || !spokenTitles.length) return;
     unlockAudio();
-    speakLine(spokenText(spokenTitles), language);
+    speakLine(spokenText(spokenTitles), voice);
   }
 
   function selectDistrict(next: Place, zoom = true) {

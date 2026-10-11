@@ -9,11 +9,12 @@ test("the full plan reads each title then its reason", () => {
   assert.deepEqual(out, { lines: ["Target breeding pools. Drain shallow pools."], voice: "en", translated: true });
 });
 
-test("a built-in title translation with an English reason is read fully in English", () => {
-  const data = { actions: [action({ title: "Ṣe àfojúsùn", englishTitle: "Target breeding pools", language: "yo" })], source: "rules", basis: "local", context: "", language: "yo" };
+test("an action left in English is skipped, never read with the English voice", () => {
+  const data = { actions: [action({ language: "en" })], source: "rules", basis: "local", context: "", language: "yo" };
   const out = pickSpokenFull(data, "yo");
-  assert.equal(out.voice, "en");
-  assert.equal(out.lines[0], "Target breeding pools. Drain shallow pools.");
+  assert.equal(out.voice, "yo");
+  assert.deepEqual(out.lines, []);
+  assert.equal(out.translated, false);
 });
 
 test("a Gemini translation is read in its own language", () => {

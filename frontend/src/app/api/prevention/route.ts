@@ -3,7 +3,7 @@ import { districtsById, getDetections, getForecast, getRisk } from "@/lib/backen
 import { gatherPreventionContext, householdCandidates, preventionContextLine, type PreventionContext } from "@/lib/prevention";
 import { healthTeamCandidates, healthTeamContextLine, healthTeamStats, type HealthTeamContext } from "@/lib/healthTeam";
 import { buildHealthTeamPrompt } from "@/lib/healthTeamPrompt";
-import { withBuiltinTitles } from "@/lib/actionTranslations";
+import { localizeAction } from "@/lib/localize";
 import { allowedNumbers, applyGeminiPlan, writingRules } from "@/lib/geminiPlan";
 import { parseLanguage, promptName } from "@/lib/languages";
 import type {
@@ -176,7 +176,7 @@ async function loadForecast(district: string): Promise<ForecastResponse | null> 
   }
 }
 
-async function chooseHealthTeamWithGemini(candidates: PreventionAction[], ctx: HealthTeamContext, language: Language) {
+async function chooseHealthTeamWithGemini(candidates: ReturnType<typeof healthTeamCandidates>, ctx: HealthTeamContext, language: Language) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
   const cacheKey = JSON.stringify({ audience: "health_team", ...ctx, rainMm: ctx.rainMm === null ? null : Math.round(ctx.rainMm), language });
@@ -257,15 +257,15 @@ async function healthTeamPlan(body: PreventionRequest): Promise<Response> {
   const candidates = healthTeamCandidates(ctx);
   const language = parseLanguage(body.language);
   const chosen = await chooseHealthTeamWithGemini(candidates, ctx, language);
-  // Without Gemini, titles still come back translated from the built-in table.
-  const fallback = chosen ? null : withBuiltinTitles(candidates.slice(0, 3), language);
+  // Without Gemini (free-tier quota, no key, a bad reply), the rules' top three come back fully
+  // translated from the built-in tables.
   const response: PreventionResponse = {
-    actions: chosen ?? fallback!.actions,
+    actions: chosen ?? candidates.slice(0, 3).map((a) => localizeAction(a, language)),
     source: chosen ? "gemini" : "rules",
     basis: "local",
-    context: healthTeamContextLine(ctx),
-    stats: healthTeamStats(ctx),
-    language: chosen ? language : fallback!.language,
+    context: healthTeamContextLine(ctx, language),
+    stats: healthTeamStats(ctx, language),
+    language,
     is_simulated: ctx.simulated,
   };
   return Response.json(response);
@@ -295,14 +295,14 @@ export async function POST(request: Request) {
   const candidates = householdCandidates(ctx);
   const requestedLanguage = parseLanguage(body.language);
   const chosen = await chooseWithGemini(candidates, ctx, requestedLanguage);
-  // Without Gemini, titles still come back translated from the built-in table.
-  const fallback = chosen ? null : withBuiltinTitles(candidates.slice(0, 3), requestedLanguage);
+  // Without Gemini (free-tier quota, no key, a bad reply), the rules' top three come back fully
+  // translated from the built-in tables.
   const response: PreventionResponse = {
-    actions: chosen ?? fallback!.actions,
+    actions: chosen ?? candidates.slice(0, 3).map((a) => localizeAction(a, requestedLanguage)),
     source: chosen ? "gemini" : "rules",
     basis: ctx.recordingGenus || ctx.regionalGenus ? "local" : "general",
-    context: preventionContextLine(ctx),
-    language: chosen ? requestedLanguage : fallback!.language,
+    context: preventionContextLine(ctx, requestedLanguage),
+    language: requestedLanguage,
   };
   return Response.json(response);
 }

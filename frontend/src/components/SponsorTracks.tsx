@@ -5,7 +5,7 @@ import Image from "next/image";
 import { scrollToId } from "@/components/SmoothScroll";
 
 // Sponsors: the section under "For prevention". One sponsor at a time, switched from the dropdown
-// in the panel's header, with that sponsor's logo beside how Mozzy uses it. Same poster palette as
+// in the panel's header, with that sponsor's logo beside how Culicid uses it. Same poster palette as
 // the rest of the page. Links to /#sponsors (or /sponsors) land here; #tiger-data, #snowflake,
 // #gemini and #elevenlabs land here with that sponsor open.
 
@@ -32,7 +32,7 @@ const SPONSORS: Sponsor[] = [
     name: "Tiger Data",
     label: "Track 01 · Storage",
     headline: "Keeping the model and map in sync",
-    body: "Tiger Data can hold the same genus and species labels as Mozzy’s training database, with a version recorded for each model. New phone detections can update the heatmap as they arrive, while unverified reports stay out of the training set until they’ve been checked.",
+    body: "Tiger Data can hold the same genus and species labels as Culicid’s training database, with a version recorded for each model. New phone detections can update the heatmap as they arrive, while unverified reports stay out of the training set until they’ve been checked.",
     logo: { src: "/logos/tiger-data.png", width: 456, height: 455 },
   },
   {
@@ -40,7 +40,7 @@ const SPONSORS: Sponsor[] = [
     name: "Snowflake",
     label: "Track 02 · Analytics",
     headline: "Finding the pattern",
-    body: "Mozzy’s predictive and prevention models are built around Snowflake’s analytics. Snowflake looks across the observation history to identify district trends, unusual increases, and projected mosquito activity. Those findings shape the heatmap and give Mozzy more to work from than individual recordings alone.",
+    body: "Culicid’s predictive and prevention models are built around Snowflake’s analytics. Snowflake looks across the observation history to identify district trends, unusual increases, and projected mosquito activity. Those findings shape the heatmap and give Culicid more to work from than individual recordings alone.",
     logo: { src: "/logos/snowflake.png", width: 1565, height: 1559 },
   },
   {

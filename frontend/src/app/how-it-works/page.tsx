@@ -15,13 +15,13 @@ import {
 } from "@/components/build/diagrams";
 import { PUBLISHED_KEY, RATE_LIMIT_PER_MIN } from "@/lib/apiKeys";
 
-// "How it works": how Mozzy was built, one hand-drawn diagram per stage, from the data to the
+// "How it works": how Culicid was built, one hand-drawn diagram per stage, from the data to the
 // Model API. Content comes from decisions.md. Standalone for now; link it from the landing header
 // when it's ready.
 
 export const metadata: Metadata = {
-  title: "How it works · Mozzy",
-  description: "How Mozzy was built: data, audio model, training, forecasts, Tiger Data, Snowflake and the Model API.",
+  title: "How it works · Culicid",
+  description: "How Culicid was built: data, audio model, training, forecasts, Tiger Data, Snowflake and the Model API.",
 };
 
 const INK = "#1A1714";
@@ -79,7 +79,7 @@ export default function HowItWorksPage() {
       <header className="fixed inset-x-0 top-0 z-40 border-b border-[#1A1714]/20" style={{ backgroundColor: BG }}>
         <div className="mx-auto flex h-[56px] max-w-[1320px] items-center gap-5 px-4 sm:px-10">
           <Link href="/" className="text-[34px] leading-none tracking-wide" style={DISPLAY}>
-            Mozzy
+            Culicid
           </Link>
           <span className="hidden h-6 w-px bg-[#1A1714]/40 sm:block" />
           <span className="hidden text-[12.5px] tracking-[0.16em] uppercase sm:block" style={TYPE}>
@@ -87,7 +87,7 @@ export default function HowItWorksPage() {
           </span>
           <nav className="ml-auto flex items-center gap-2 sm:gap-6" style={DISPLAY}>
             <Link href="/" className="hidden px-2 py-1 text-base tracking-wider hover:underline sm:block">
-              Back to Mozzy
+              Back to Culicid
             </Link>
             <a
               href="#api"
@@ -107,7 +107,7 @@ export default function HowItWorksPage() {
             Under the hood
           </span>
           <h1 className="m-0 text-[clamp(72px,13vw,184px)] leading-[0.82] tracking-wide uppercase" style={DISPLAY}>
-            How Mozzy <span style={{ color: ORANGE }}>works</span>
+            How Culicid <span style={{ color: ORANGE }}>works</span>
           </h1>
           <p className="m-0 max-w-[60ch] text-[clamp(19px,1.8vw,23px)] leading-[1.55] font-light text-[#1A1714]/85" style={BODY}>
             Everything between a buzz and a map: the data we found and the data we had to simulate, the models we kept and the ones we threw

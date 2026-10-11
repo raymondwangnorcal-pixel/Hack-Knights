@@ -107,7 +107,7 @@ export function StickyBar({
         }}
       >
         <span className="leading-none tracking-wide" style={{ ...DISPLAY, fontSize: `${lerp(44, 34, p)}px` }}>
-          Mozzy
+          Culicid
         </span>
         <span className="hidden w-px bg-[#ECE6DA]/40 sm:block max-[1439px]:opacity-[var(--tag)]" style={{ height: `${lerp(30, 24, p)}px` }} />
         {/* The tagline stays on wide screens. Below 1440px there isn't room for it, a centred toggle
@@ -208,7 +208,7 @@ function SideToggle({
   return (
     <div
       role="tablist"
-      aria-label="Who is Mozzy for?"
+      aria-label="Who is Culicid for?"
       aria-hidden={!shown}
       className={`flex whitespace-nowrap rounded-full border border-[#ECE6DA]/25 p-[3px] ${className ?? ""}`}
       style={{

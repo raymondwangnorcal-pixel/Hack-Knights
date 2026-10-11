@@ -10,7 +10,7 @@ export function GET(request: Request) {
   if (caller instanceof Response) return caller;
   return Response.json(
     {
-      api: "mozzy",
+      api: "culicid",
       version: "v1",
       organisation: caller.org,
       rate_limit_per_minute: RATE_LIMIT_PER_MIN,

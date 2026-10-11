@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { DISEASE_LABEL } from "@/lib/species";
 import RiskHeatMap from "@/components/RiskHeatMap";
 import { SLIDE_MS, SlideStage } from "@/components/SlideStage";
 import { DOT_GRADIENT } from "@/lib/dotColors";
 import ForecastChart from "@/components/ForecastChart";
-import { CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus } from "@/lib/cities";
+import { CITIES, CITY_ZOOM, DISTRICT_ZOOM, type City, type MapFocus } from "@/lib/cities";
 import type {
   Country,
   DetectionsResponse,
@@ -41,13 +41,40 @@ export default function DashboardPage() {
   const [data, setData] = useState<Partial<Record<Country, { risk: RiskResponse; detections: DetectionsResponse }>>>({});
   const [picked, setPicked] = useState<DistrictRisk | null>(null);
   const [activeCity, setActiveCity] = useState<City | null>(null);
+  const [pickedCity, setPickedCity] = useState<City | null>(null);
   const [focus, setFocus] = useState<MapFocus | null>(null);
   // Keyed by district so stale results never show for a newly selected district.
   const [forecastFor, setForecastFor] = useState<ForecastResponse | null>(null);
   const [planFor, setPlanFor] = useState<{ district: string; text: string } | null>(null);
   const risk = data[country]?.risk ?? null;
-  // Until a district is picked in this country, the top-ranked one is selected.
-  const selected = picked?.country === country ? picked : (risk?.districts[0] ?? null);
+  // Clicking a city that has data selects the whole city (Lagos, São Paulo, New York) as one summed-up area;
+  // clicking a district inside it selects just that district. Nothing is selected until the first click.
+  const cityRisk = useMemo(() => {
+    if (!risk) return null;
+    const ds = risk.districts;
+    if (!ds.length) return null;
+    const name = CITIES[risk.country].find((c) => c.hasData)?.name ?? ds[0].district;
+    const detections = ds.reduce((s, d) => s + d.detections_7d, 0);
+    const weighted = (f: (d: DistrictRisk) => number) => ds.reduce((s, d) => s + f(d) * d.detections_7d, 0) / (detections || 1);
+    const city: DistrictRisk = {
+      district: name,
+      country: risk.country,
+      lat: ds.reduce((s, d) => s + d.lat, 0) / ds.length,
+      lng: ds.reduce((s, d) => s + d.lng, 0) / ds.length,
+      risk_score: Math.round(weighted((d) => d.risk_score)),
+      rank: 0,
+      detections_7d: detections,
+      cases_14d: ds.reduce((s, d) => s + d.cases_14d, 0),
+      weather_factor: weighted((d) => d.weather_factor),
+      main_disease: ds[0].main_disease,
+    };
+    return city;
+  }, [risk]);
+  const cityHere = pickedCity && CITIES[country].some((c) => c.name === pickedCity.name) ? pickedCity : null;
+  const selected = picked?.country === country ? picked : cityHere?.hasData ? cityRisk : null;
+  const isCity = !!selected && selected === cityRisk;
+  // A city on the map with no data behind it yet.
+  const noDataCity = !picked || picked.country !== country ? (cityHere && !cityHere.hasData ? cityHere : null) : null;
 
   useEffect(() => {
     COUNTRIES.forEach((c) => {
@@ -89,9 +116,38 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!selected) return;
     const district = selected.district;
-    fetch(`/api/forecast?district=${encodeURIComponent(district)}`)
-      .then((r) => r.json())
-      .then(setForecastFor);
+    if (isCity) {
+      // The city has no forecast of its own: add up its districts', week by week.
+      const names = risk?.districts.map((d) => d.district) ?? [];
+      Promise.all(
+        names.map((n) =>
+          fetch(`/api/forecast?district=${encodeURIComponent(n)}`)
+            .then((r) => r.json() as Promise<ForecastResponse>)
+            .catch(() => null),
+        ),
+      ).then((all) => {
+        const fs = all.filter((f): f is ForecastResponse => !!f?.weeks);
+        if (!fs.length) return;
+        setForecastFor({
+          district,
+          country: selected.country,
+          disease: fs[0].disease,
+          unit: fs[0].unit,
+          is_simulated: fs.some((f) => f.is_simulated),
+          weeks: fs[0].weeks.map((w, i) => ({
+            week_ahead: w.week_ahead,
+            week_start: w.week_start,
+            low: fs.reduce((s, f) => s + (f.weeks[i]?.low ?? 0), 0),
+            mid: fs.reduce((s, f) => s + (f.weeks[i]?.mid ?? 0), 0),
+            high: fs.reduce((s, f) => s + (f.weeks[i]?.high ?? 0), 0),
+          })),
+        });
+      });
+    } else {
+      fetch(`/api/forecast?district=${encodeURIComponent(district)}`)
+        .then((r) => r.json())
+        .then(setForecastFor);
+    }
     fetch("/api/recommend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -99,6 +155,7 @@ export default function DashboardPage() {
     })
       .then((r) => r.json())
       .then((d) => setPlanFor({ district, text: d.text ?? "" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
   // Keep the previous district's results on screen (dimmed) while the new ones load,
@@ -111,14 +168,20 @@ export default function DashboardPage() {
 
   const selectCity = (c: City) => {
     setActiveCity(c);
+    setPickedCity(c);
+    setPicked(null);
+    setPanelOpen(true);
     setFocus({ key: Date.now(), lat: c.lat, lng: c.lng, zoom: c.zoom ?? CITY_ZOOM });
   };
   const backToCities = () => {
     setActiveCity(null);
+    setPickedCity(null);
+    setPicked(null);
     setFocus({ key: Date.now(), reset: true });
   };
   const selectDistrict = (d: DistrictRisk) => {
     setPicked(d);
+    setPickedCity(null);
     setPanelOpen(true);
     setFocus({ key: Date.now(), lat: d.lat, lng: d.lng, zoom: DISTRICT_ZOOM });
   };
@@ -127,6 +190,8 @@ export default function DashboardPage() {
     if (c === country) {
       // The current country's button doubles as "zoom all the way out": back to the whole-country view.
       setActiveCity(null);
+      setPickedCity(null);
+      setPicked(null);
       setFocus({ key: -(resetCount.current += 1), reset: true });
       return;
     }
@@ -171,6 +236,7 @@ export default function DashboardPage() {
               selected={c === country ? selected?.district : undefined}
               onSelect={selectDistrict}
               onCitySelect={selectCity}
+              onSwipe={step}
               focus={c === country ? focus : resets[c] ? { key: resets[c]!, reset: true } : null}
             />
           );
@@ -232,9 +298,24 @@ export default function DashboardPage() {
         </button>
       ))}
 
-      {/* Selected district: a pill that opens into the forecast and the recommended actions. */}
-      {selected && (
-        <div className="absolute bottom-12 left-4 z-[1000] w-[min(780px,calc(100vw-2rem))] sm:left-20">
+      {/* Bottom left: asks for a click until a location (city or district) is picked; then a pill that
+          opens into its forecast and the recommended actions. */}
+      <div className="absolute bottom-12 left-4 z-[1000] w-[min(780px,calc(100vw-2rem))] sm:left-20">
+        {!selected ? (
+          <p
+            className="inline-block rounded-sm border px-4 py-2 text-xs uppercase tracking-widest backdrop-blur-md"
+            style={{ ...TYPE, borderColor: `${INK}40`, backgroundColor: "rgba(19,17,15,0.8)", color: `${INK}cc` }}
+          >
+            {noDataCity ? (
+              <>
+                <span style={{ color: ORANGE }}>{noDataCity.name}</span> has no forecast data yet
+              </>
+            ) : (
+              "Click on a location to see its forecast"
+            )}
+          </p>
+        ) : (
+          <>
           {panelOpen ? (
             <section
               className="rounded-sm border p-4 backdrop-blur-md"
@@ -244,7 +325,7 @@ export default function DashboardPage() {
                 <h2 className="text-2xl leading-none tracking-wide uppercase" style={DISPLAY}>
                   <span style={{ color: ORANGE }}>{selected.district}</span>
                   <span className="ml-3 text-base" style={{ ...TYPE, color: `${INK}b3` }}>
-                    risk {selected.risk_score}/100 · {selected.detections_7d} detections / 7d
+                    {isCity ? "citywide risk" : "risk"} {selected.risk_score}/100 · {selected.detections_7d} detections / 7d
                   </span>
                 </h2>
                 <button
@@ -300,8 +381,9 @@ export default function DashboardPage() {
               </span>
             </button>
           )}
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Zoom buttons are page controls (not part of a map), so they stay put while maps slide. They send the
           same eased wheel zoom a mouse wheel does to the map in the middle of the screen. */}

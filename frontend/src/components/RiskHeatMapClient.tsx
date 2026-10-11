@@ -14,6 +14,7 @@ interface RiskHeatMapClientProps {
   selected?: string;
   onSelect: (d: DistrictRisk) => void;
   onCitySelect: (c: City) => void;
+  onSwipe?: (dir: 1 | -1) => void;
   focus?: MapFocus | null;
   height?: number | string;
 }
@@ -29,7 +30,7 @@ type MapInternals = L.Map & {
 
 const ZOOM_PER_WHEEL_PX = 1 / 150; // a mouse-wheel notch (~100 px) is about two thirds of a zoom level
 const ZOOM_PER_TRACKPAD_PX = 1 / 70; // pinch and two-finger scroll send many small deltas, so each counts for more
-const EASE = 0.3;
+const ZOOM_TAU_MS = 75; // time constant of the zoom easing; time-based so it feels the same at any frame rate
 const SHOW_DISTRICT_CIRCLES = false;
 const TOP_CLEARANCE = 70; // px kept free at the top for the title floating over the map
 
@@ -62,9 +63,12 @@ function SmoothWheelZoom() {
       map._moveEnd(true);
     };
 
-    const step = () => {
+    let last = 0;
+    const step = (now: number) => {
+      const dt = last ? Math.min(50, now - last) : 16;
+      last = now;
       const zoom = map.getZoom();
-      const next = Math.abs(goal - zoom) < 0.001 ? goal : zoom + (goal - zoom) * EASE;
+      const next = Math.abs(goal - zoom) < 0.002 ? goal : zoom + (goal - zoom) * (1 - Math.exp(-dt / ZOOM_TAU_MS));
       const offset = anchorPoint.subtract(map.getSize().divideBy(2));
       const center = map.unproject(map.project(anchorLatLng, next).subtract(offset), next);
       map._move(map._limitCenter(center, next, (map.options.maxBounds as L.LatLngBounds | undefined) ?? null), next);
@@ -80,6 +84,7 @@ function SmoothWheelZoom() {
       e.preventDefault();
       if (frame === null) {
         map._stop();
+        last = 0;
         goal = map.getZoom();
         map._moveStart(true, false);
         frame = requestAnimationFrame(step);
@@ -106,6 +111,9 @@ function SmoothWheelZoom() {
   return null;
 }
 
+// Labels are placed with a transform from (0, 0) of their layer, so these must hold even when the
+// stylesheet is stale or late: without them a label drops into normal flow and drifts off its place.
+const LABEL_BASE = "position:absolute;left:0;top:0;margin:0;pointer-events:auto;";
 const DISTRICT_LABEL_ZOOM = 9.5; // from here on, district labels replace city labels
 
 // Labels live in their own layer above the black mask and the dots, repositioned every frame.
@@ -126,6 +134,7 @@ function CityLabels({ country, onSelect }: { country: Country; onSelect: (c: Cit
       el.type = "button";
       el.title = `Zoom to ${c.name}`;
       el.className = `city-label${c.hasData ? " city-label--data" : ""}`;
+      el.style.cssText = LABEL_BASE;
       el.innerHTML = `<span class="city-dot"></span><span></span>`;
       el.lastElementChild!.textContent = c.name;
       el.addEventListener("click", () => onSelectRef.current(c));
@@ -142,9 +151,9 @@ function CityLabels({ country, onSelect }: { country: Country; onSelect: (c: Cit
     };
 
     place();
-    map.on("move zoom resize", place);
+    map.on("move resize", place);
     return () => {
-      map.off("move zoom resize", place);
+      map.off("move resize", place);
       layer.remove();
     };
   }, [map, country]);
@@ -179,10 +188,11 @@ function DistrictLabels({
       el.type = "button";
       el.title = `${d.district}: risk ${d.risk_score}/100`;
       el.className = `district-label${d.district === selected ? " district-label--selected" : ""}`;
+      el.style.cssText = LABEL_BASE;
       el.innerHTML = `<span class="district-name"></span><span class="district-score"></span>`;
       (el.children[0] as HTMLElement).textContent = d.district;
       (el.children[1] as HTMLElement).textContent = `${d.risk_score}`;
-      (el.children[1] as HTMLElement).style.color = riskColor(d.risk_score);
+      (el.children[1] as HTMLElement).style.color = `hsl(${Math.max(0, 40 - d.risk_score * 0.4)} 90% 36%)`;
       el.addEventListener("click", () => onSelectRef.current(d));
       layer.appendChild(el);
       return { d, el };
@@ -196,9 +206,9 @@ function DistrictLabels({
       }
     };
     place();
-    map.on("move zoom resize", place);
+    map.on("move resize", place);
     return () => {
-      map.off("move zoom resize", place);
+      map.off("move resize", place);
       layer.remove();
     };
   }, [map, districts, selected]);
@@ -211,6 +221,7 @@ function DistrictLabels({
 // at 13 and deeper zooms stretch them.
 const TILE_FADE_START = 10;
 const TILE_FADE_RANGE = 1;
+const STREET_BACKDROP = 52; // gray level (0-255) behind the street tiles, close to their land color
 
 function StreetTiles() {
   const map = useMap();
@@ -223,10 +234,20 @@ function StreetTiles() {
         maxNativeZoom: 13,
         maxZoom: 15,
         opacity: 0,
+        keepBuffer: 8, // keep far more tiles around the view, so a fast zoom or pan meets already-loaded ones
+        updateInterval: 60, // ask for new tiles sooner while zooming (default 200 ms)
         attribution: "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, OpenStreetMap contributors",
       },
     ).addTo(map);
-    const fade = () => layer.setOpacity(Math.min(1, Math.max(0, map.getZoom() - TILE_FADE_START) / TILE_FADE_RANGE));
+    const container = map.getContainer();
+    // Tiles that haven't arrived yet show the map background. As the street tiles take over, that background
+    // goes from black to the tiles' own gray, so a missing tile reads as a slightly dim patch, not a black flash.
+    const fade = () => {
+      const t = Math.min(1, Math.max(0, map.getZoom() - TILE_FADE_START) / TILE_FADE_RANGE);
+      layer.setOpacity(t);
+      const g = Math.round(t * STREET_BACKDROP);
+      container.style.backgroundColor = `rgb(${g}, ${g}, ${g})`;
+    };
     fade();
     map.on("zoom", fade);
     return () => {
@@ -491,16 +512,25 @@ function fillTip(tip: HTMLElement, o: Detection, onClose: () => void) {
   close.addEventListener("click", onClose);
   const sure = o.confidence ? ` · ${Math.round(o.confidence * 100)}% sure` : "";
   const carries = info.diseases.length ? `Can carry ${info.diseases.map((d) => DISEASE_LABEL[d].toLowerCase()).join(", ")}` : "";
-  const how = `${o.source === "trap" ? "Smart trap" : "Phone recording"}${o.is_simulated ? " · simulated demo data" : ""}`;
   tip.replaceChildren(
     close,
     line("dot-tip-title", o.species ?? `${info.label} mosquito`),
     line("dot-tip-sub", `${info.label}${sure}`),
     line("dot-tip-row", `Heard ${timeAgo(o.time)} in ${o.district}`),
     ...(carries ? [line("dot-tip-row", carries)] : []),
-    line("dot-tip-fine", how),
-    ...(o.species ? [line("dot-tip-fine", "Species is the closest match; the genus is the reliable part")] : []),
   );
+}
+
+// Hovering a dot: just the species and how sure the model was. Clicking opens the full card.
+function fillHover(el: HTMLElement, o: Detection) {
+  const info = GENUS_INFO[o.genus] ?? GENUS_INFO.other;
+  const title = document.createElement("div");
+  title.className = "dot-hover-title";
+  title.textContent = o.species ?? `${info.label} mosquito`;
+  const sub = document.createElement("div");
+  sub.className = "dot-hover-sub";
+  sub.textContent = o.confidence ? `${info.label} · ${Math.round(o.confidence * 100)}% sure · click for more` : `${info.label} · click for more`;
+  el.replaceChildren(title, sub);
 }
 
 function MapOverlay({ country, detections }: { country: Country; detections: Detection[] }) {
@@ -531,7 +561,7 @@ function MapOverlay({ country, detections }: { country: Country; detections: Det
     let picked: Detection | null = null;
     const tip = document.createElement("div");
     tip.className = "dot-tip";
-    tip.style.display = "none";
+    tip.style.cssText = "position:absolute;left:0;top:0;z-index:460;display:none;";
     container.appendChild(tip);
     L.DomEvent.disableClickPropagation(tip);
     L.DomEvent.disableScrollPropagation(tip);
@@ -554,20 +584,46 @@ function MapOverlay({ country, detections }: { country: Country; detections: Det
       const below = p.y < 190; // flip under the dot near the top edge
       tip.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, ${below ? "16px" : "calc(-100% - 16px)"})`;
     };
+    // Hovering a dot shows a small species label that follows it; it hides once that dot is opened.
+    let hovered: Detection | null = null;
+    const hoverTip = document.createElement("div");
+    hoverTip.className = "dot-hover";
+    hoverTip.style.cssText = "position:absolute;left:0;top:0;z-index:458;pointer-events:none;display:none;";
+    container.appendChild(hoverTip);
+    const placeHover = () => {
+      if (!hovered || hovered === picked) return;
+      const p = map.latLngToContainerPoint([hovered.lat, hovered.lng]);
+      const below = p.y < 70;
+      hoverTip.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, ${below ? "12px" : "calc(-100% - 12px)"})`;
+    };
+    const setHover = (o: Detection | null) => {
+      if (o === hovered) return;
+      hovered = o;
+      if (o) fillHover(hoverTip, o);
+      hoverTip.style.display = o && o !== picked ? "" : "none";
+      placeHover();
+      redraw();
+    };
     const pick = (o: Detection | null) => {
       picked = o;
       if (o) fillTip(tip, o, () => pick(null));
       tip.style.display = o ? "" : "none";
+      hoverTip.style.display = hovered && hovered !== picked ? "" : "none";
       placeTip();
+      placeHover();
       redraw();
     };
     const onClick = (e: L.LeafletMouseEvent) => pick(hit(e.containerPoint));
     const onHover = (e: L.LeafletMouseEvent) => {
-      container.style.cursor = hit(e.containerPoint) ? "pointer" : "";
+      const o = hit(e.containerPoint);
+      container.style.cursor = o ? "pointer" : "";
+      setHover(o);
     };
+    const onLeave = () => setHover(null);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && pick(null);
     map.on("click", onClick);
     map.on("mousemove", onHover);
+    map.on("mouseout", onLeave);
     document.addEventListener("keydown", onKey);
 
     let adm1: Line[] = [];
@@ -647,6 +703,16 @@ function MapOverlay({ country, detections }: { country: Country; detections: Det
         ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
         ctx.fill();
       }
+      if (hovered && hovered !== picked) {
+        const p = map.latLngToContainerPoint([hovered.lat, hovered.lng]);
+        ctx.globalAlpha = 0.85;
+        ctx.strokeStyle = "#ECE6DA";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r + 3, 0, Math.PI * 2);
+        ctx.stroke();
+        placeHover();
+      }
       if (picked) {
         const p = map.latLngToContainerPoint([picked.lat, picked.lng]);
         ctx.globalAlpha = 1;
@@ -660,19 +726,91 @@ function MapOverlay({ country, detections }: { country: Country; detections: Det
     };
 
     draw();
-    map.on("move zoom resize", draw);
+    map.on("move resize", draw);
     return () => {
       alive = false;
       cancelAnimationFrame(queued);
-      map.off("move zoom resize", draw);
+      map.off("move resize", draw);
       map.off("click", onClick);
       map.off("mousemove", onHover);
+      map.off("mouseout", onLeave);
       document.removeEventListener("keydown", onKey);
       container.style.cursor = "";
+      hoverTip.remove();
       tip.remove();
       canvas.remove();
     };
   }, [map, detections, country]);
+
+  return null;
+}
+
+// Dragging sideways (or swiping two fingers sideways) on the whole-country view slides to the next
+// country. Zoomed in, the same drag just pans the map, so it only counts at the whole-country zoom.
+const SWIPE_DRAG_PX = 110;
+const SWIPE_WHEEL_PX = 140;
+
+function SwipeToChange({ onSwipe }: { onSwipe: (dir: 1 | -1) => void }) {
+  const map = useMap();
+  const onSwipeRef = useRef(onSwipe);
+  useEffect(() => {
+    onSwipeRef.current = onSwipe;
+  });
+
+  useEffect(() => {
+    const container = map.getContainer();
+    const wholeCountry = () => map.getZoom() <= map.getMinZoom() + 0.5;
+
+    let start: { x: number; y: number; id: number } | null = null;
+    const onDown = (e: PointerEvent) => {
+      if (e.button > 0 || !wholeCountry() || (e.target as HTMLElement).closest("button, a, .dot-tip")) return;
+      start = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!start || e.pointerId !== start.id) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      if (Math.abs(dx) < SWIPE_DRAG_PX || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+      start = null;
+      onSwipeRef.current(dx < 0 ? 1 : -1); // drag left: the next map comes in from the right
+    };
+    const onUp = () => {
+      start = null;
+    };
+
+    let wheelX = 0;
+    let wheelTimer: ReturnType<typeof setTimeout> | undefined;
+    let locked = false;
+    const onWheel = (e: WheelEvent) => {
+      if (locked || !wholeCountry() || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      wheelX += e.deltaX;
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(() => {
+        wheelX = 0;
+      }, 200);
+      if (Math.abs(wheelX) < SWIPE_WHEEL_PX) return;
+      onSwipeRef.current(wheelX > 0 ? 1 : -1);
+      wheelX = 0;
+      locked = true; // one slide per swipe, not one per trackpad momentum tick
+      setTimeout(() => {
+        locked = false;
+      }, 900);
+    };
+
+    container.addEventListener("pointerdown", onDown);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    container.addEventListener("wheel", onWheel, { passive: true });
+    return () => {
+      container.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      container.removeEventListener("wheel", onWheel);
+      clearTimeout(wheelTimer);
+    };
+  }, [map]);
 
   return null;
 }
@@ -714,6 +852,7 @@ export default function RiskHeatMapClient({
   selected,
   onSelect,
   onCitySelect,
+  onSwipe,
   focus,
   height = "100%",
 }: RiskHeatMapClientProps) {
@@ -727,19 +866,21 @@ export default function RiskHeatMapClient({
       minZoom={2}
       maxZoom={15}
       zoomAnimation={false}
+      fadeAnimation={false}
       maxBoundsViscosity={1}
       scrollWheelZoom={false}
       zoomControl={false}
       attributionControl={false}
       preferCanvas
       className="risk-map"
-      style={{ width: "100%", height }}
+      style={{ width: "100%", height, background: "#000" }}
     >
       <StreetTiles />
       <SmoothWheelZoom />
       <CityLabels country={country} onSelect={onCitySelect} />
       <FlyToFocus focus={focus} country={country} />
       <FitToCountry country={country} />
+      {onSwipe && <SwipeToChange onSwipe={onSwipe} />}
       {SHOW_DISTRICT_CIRCLES && districts.map((d) => {
         const isSel = d.district === selected;
         return (

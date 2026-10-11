@@ -3,15 +3,15 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 
 // Slides between full-size panes horizontally: the old pane glides out one way while the new one glides
-// in from the other, on a gentle ease-in-out sine curve (no snap at either end).
+// in from the other, on a curve that starts fast and settles softly (snappy, but no hard stop).
 //
 // Every pane stays mounted, parked off-screen, so a slide only moves layers that are already built and
 // painted (transform on the compositor): nothing is created or laid out while it runs. That is what keeps
 // it smooth. Transforms are written straight to the elements, not through React state, because a slide
 // needs "place the new pane off-screen with no transition, paint, then transition to 0" in that order.
 
-export const SLIDE_MS = 1500;
-const EASE = "cubic-bezier(0.37, 0, 0.63, 1)"; // easeInOutSine
+export const SLIDE_MS = 650;
+const EASE = "cubic-bezier(0.32, 0.72, 0, 1)"; // quick off the mark, long soft landing
 const PARKED = 200; // % off to the right, past the clipped edge
 
 interface SlideStageProps<K extends string> {
@@ -64,7 +64,7 @@ export function SlideStage<K extends string>({ keys, current, dir, render }: Sli
   }, [current, dir, keys]);
 
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <div className="absolute inset-0 overflow-hidden bg-black">
       {keys.map((k) => (
         <div
           key={k}

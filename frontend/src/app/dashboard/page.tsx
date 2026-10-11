@@ -246,7 +246,7 @@ export default function DashboardPage() {
       <div className="pointer-events-none absolute inset-x-0 top-0 z-[1000] flex flex-wrap items-start justify-between gap-4 px-5 pt-4">
         <div style={{ textShadow: "0 0 6px #000, 0 0 14px #000" }}>
           <Link href="/?side=prevention" className="pointer-events-auto text-xs uppercase tracking-widest opacity-70 hover:opacity-100" style={TYPE}>
-            ← Mozzy
+            ← Culicid
           </Link>
           <h1 className="mt-1 text-5xl leading-none tracking-wide uppercase" style={DISPLAY}>
             <span style={{ color: ORANGE }}>{city}</span> · {disease.replace("_", " ")} risk

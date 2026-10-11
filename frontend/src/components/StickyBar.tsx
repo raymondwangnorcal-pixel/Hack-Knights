@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { RollingNumber } from "@/components/RollingNumber";
 
 // The intro's masthead, pinned to the top of the window. As the first screen scrolls away the
@@ -107,7 +108,7 @@ export function StickyBar({
         }}
       >
         <span className="leading-none tracking-wide" style={{ ...DISPLAY, fontSize: `${lerp(44, 34, p)}px` }}>
-          Mozzy
+          Culicid
         </span>
         <span className="hidden w-px bg-[#ECE6DA]/40 sm:block max-[1439px]:opacity-[var(--tag)]" style={{ height: `${lerp(30, 24, p)}px` }} />
         {/* The tagline stays on wide screens. Below 1440px there isn't room for it, a centred toggle
@@ -163,6 +164,10 @@ export function StickyBar({
           <button onClick={onSponsors} className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
             Sponsors
           </button>
+          {/* How Culicid was built: data, audio model, training, forecasts, databases and the Model API. */}
+          <Link href="/how-it-works" className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
+            How it works
+          </Link>
           <button
             onClick={() => onPick("you")}
             className="ml-1 rounded-sm px-4 py-1.5 text-base tracking-wider whitespace-nowrap text-[#13110F] transition-opacity hover:opacity-85"
@@ -208,7 +213,7 @@ function SideToggle({
   return (
     <div
       role="tablist"
-      aria-label="Who is Mozzy for?"
+      aria-label="Who is Culicid for?"
       aria-hidden={!shown}
       className={`flex whitespace-nowrap rounded-full border border-[#ECE6DA]/25 p-[3px] ${className ?? ""}`}
       style={{

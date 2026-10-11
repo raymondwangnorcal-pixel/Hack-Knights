@@ -80,7 +80,7 @@ export function Intro({
 
   return (
     <section
-      aria-label="Mozzy: mosquito-borne disease this year"
+      aria-label="Culicid: mosquito-borne disease this year"
       className="relative flex flex-col"
       style={{ backgroundColor: "#13110F", backgroundImage: PAPER, color: INK }}
     >
@@ -199,7 +199,7 @@ function Panel({
 
 // Where the counters and maps come from. Shown on hover, focus or tap so judges can check.
 const SOURCES =
-  "Since Jan 1 (UTC) · WHO and ECDC yearly estimates spread evenly over the year · Zika, West Nile and lymphatic filariasis excluded, so these are a floor · map regions are broad groupings; hover figures from WHO and ECDC, 2024 · death bands are Mozzy estimates";
+  "Since Jan 1 (UTC) · WHO and ECDC yearly estimates spread evenly over the year · Zika, West Nile and lymphatic filariasis excluded, so these are a floor · map regions are broad groupings; hover figures from WHO and ECDC, 2024 · death bands are Culicid estimates";
 
 function Sources() {
   const [open, setOpen] = useState(false);

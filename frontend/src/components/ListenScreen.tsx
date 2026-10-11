@@ -199,7 +199,7 @@ export function ListenScreen() {
       data = (await res.json()) as ClassifyResponse;
     } catch {
       const mock = (classifyMock as Record<Country, ClassifyResponse>)[place.country];
-      data = { ...mock, detection_id: `offline-${Date.now()}`, is_simulated: true, fallback_reason: "Couldn't reach Mozzy's server" };
+      data = { ...mock, detection_id: `offline-${Date.now()}`, is_simulated: true, fallback_reason: "Couldn't reach Culicid's server" };
     }
     if (id !== run.current) throw new Error("stale");
     return data;

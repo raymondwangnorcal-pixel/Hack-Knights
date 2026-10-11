@@ -32,7 +32,9 @@ const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif"
 const COND = { fontFamily: "'Roboto Condensed', var(--font-geist-sans), sans-serif" };
 const MONO = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 
-const CLIP_SECONDS = 10;
+// Seconds recorded after the buzz is heard. The model scores 2 s windows, and on test clips its genus
+// accuracy was the same at 2–8 s, so 3 s keeps the wait short without losing anything.
+const CLIP_SECONDS = 3;
 // The picker offers Lagos and São Paulo; US (New York, from the backend) isn't on this screen yet.
 const CITY: Record<Country, string> = { NG: "Lagos", BR: "São Paulo", US: "New York" };
 const SAMPLE: Record<Country, string> = {
@@ -401,6 +403,8 @@ export function ListenScreen() {
   }
 
   const district = risk[place.country].find((d) => d.district === place.district) ?? null;
+  // The sample clips run longer than a capture: while one plays, the picture and time axis fit it.
+  const windowSec = stage === "sample" && clip ? Math.max(CLIP_SECONDS, Math.ceil(clip.seconds)) : CLIP_SECONDS;
   const timer =
     (stage === "result" || stage === "uploading") && clip ? clip.seconds : stage === "recording" ? Math.min(CLIP_SECONDS, elapsed) : active ? elapsed : 0;
 
@@ -468,7 +472,7 @@ export function ListenScreen() {
           <Spectrogram
             source={analyser}
             epoch={epoch}
-            windowSec={CLIP_SECONDS}
+            windowSec={windowSec}
             showPlayhead={active || replaying}
             playhead={() => (replaying && replay.current ? replay.current.currentTime : null)}
             className="h-[190px] w-full overflow-hidden sm:h-[260px] lg:h-[clamp(220px,30svh,320px)]"
@@ -509,14 +513,14 @@ export function ListenScreen() {
         </div>
         {/* Time axis */}
         <div className="relative mt-0 h-7 border-t border-[#ECE6DA]/40" style={COND} aria-hidden="true">
-          {Array.from({ length: CLIP_SECONDS + 1 }, (_, s) => (
+          {Array.from({ length: windowSec + 1 }, (_, s) => (
             <span
               key={s}
-              className={`absolute top-0 flex -translate-x-1/2 flex-col items-center text-[13px] opacity-80 sm:text-[15px] ${s % 2 ? "max-sm:hidden" : ""}`}
-              style={{ left: `${(s / CLIP_SECONDS) * 100}%` }}
+              className={`absolute top-0 flex -translate-x-1/2 flex-col items-center text-[13px] opacity-80 sm:text-[15px] ${s % 2 && windowSec > 6 ? "max-sm:hidden" : ""}`}
+              style={{ left: `${(s / windowSec) * 100}%` }}
             >
               <span className="h-2 w-px bg-[#ECE6DA]/50" />
-              <span className={s === 0 ? "translate-x-1/2" : s === CLIP_SECONDS ? "-translate-x-1/2" : ""}>{s}s</span>
+              <span className={s === 0 ? "translate-x-1/2" : s === windowSec ? "-translate-x-1/2" : ""}>{s}s</span>
             </span>
           ))}
         </div>

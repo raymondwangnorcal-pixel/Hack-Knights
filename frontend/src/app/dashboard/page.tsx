@@ -413,7 +413,7 @@ export default function DashboardPage() {
         className="pointer-events-none absolute inset-x-4 bottom-8 z-[1000] flex items-end justify-between gap-6 text-[11px] uppercase tracking-widest opacity-80"
         style={{ ...TYPE, textShadow: "0 0 4px #000, 0 0 8px #000" }}
       >
-        <span>1 dot = 1 mosquito detection, last 7 days{risk?.is_simulated ? " · simulated data" : ""}</span>
+        <span>1 dot = 1 mosquito detection, last 7 days</span>
         <div className="mr-12 flex flex-col items-end gap-1">
           <span className="flex items-center gap-2">
             Center

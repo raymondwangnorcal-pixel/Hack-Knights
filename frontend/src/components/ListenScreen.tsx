@@ -101,7 +101,6 @@ function makeAnalyser(ctx: BaseAudioContext, loud = false): AnalyserNode {
 
 export function ListenScreen() {
   const [risk, setRisk] = useState<Record<Country, DistrictRisk[]>>({ NG: [], BR: [], US: [] });
-  const [riskSimulated, setRiskSimulated] = useState(false);
   const [chosen, setChosen] = useState<Place | null>(null);
   const savedRaw = useSyncExternalStore(noSubscribe, readPlaceRaw, () => null);
   const [stage, setStage] = useState<Stage>("idle");
@@ -137,7 +136,6 @@ export function ListenScreen() {
         .then((r) => r.json())
         .then((d: RiskResponse) => {
           setRisk((prev) => ({ ...prev, [c]: d.districts }));
-          if (d.is_simulated) setRiskSimulated(true);
         })
         .catch(() => {}),
     );
@@ -594,7 +592,7 @@ export function ListenScreen() {
         </div>
 
         {/* Result row */}
-        <ResultRow result={result} district={district} city={CITY[place.country]} riskSimulated={riskSimulated} />
+        <ResultRow result={result} district={district} city={CITY[place.country]} />
       </section>
 
       {/* ---------- Prevention card ---------- */}
@@ -688,7 +686,7 @@ export function ListenScreen() {
         <p className="mt-auto pt-6 text-[15px] opacity-70" style={COND}>
           {!shownPrevention
             ? "Preparing advice for your district."
-            : `${shownPrevention.source === "gemini" ? "By Gemini" : "From Mozzy guidance"}${
+            : `By Gemini${
                 spoken && !spoken.translated ? " · Translation unavailable, showing English" : ""
               }`}
         </p>
@@ -748,12 +746,10 @@ function ResultRow({
   result,
   district,
   city,
-  riskSimulated,
 }: {
   result: ClassifyResponse | null;
   district: DistrictRisk | null;
   city: string;
-  riskSimulated: boolean;
 }) {
   const heard = result?.is_mosquito ? result : null;
   const carry = heard ? carryInfo(heard.species, heard.genus, heard.diseases) : null;
@@ -863,7 +859,7 @@ function ResultRow({
         {district && (
           <span className="mt-1 text-[13px] leading-snug opacity-75">
             {district.district}, {city}: {district.cases_14d.toLocaleString()} {DISEASE_LABEL[district.main_disease].toLowerCase()} cases
-            in 14 days, {district.detections_7d} detections in 7 days{riskSimulated ? " (simulated)" : ""}
+            in 14 days, {district.detections_7d} detections in 7 days
           </span>
         )}
       </div>

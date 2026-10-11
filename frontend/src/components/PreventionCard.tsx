@@ -134,7 +134,7 @@ export function PreventionCard({
       <p className="mt-auto pt-6 text-[15px] opacity-70" style={COND}>
         {!data
           ? loadingFooter
-          : `${data.source === "gemini" ? "By Gemini" : "From Mozzy guidance"}${
+          : `By Gemini${
               !pickSpoken(data, language).translated ? " · Translation unavailable, showing English" : ""
             }`}
       </p>

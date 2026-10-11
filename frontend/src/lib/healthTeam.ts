@@ -83,7 +83,12 @@ function forecastNote(ctx: HealthTeamContext): string {
   const f = ctx.forecast;
   if (!f) return "";
   const trend = forecastTrend(ctx);
-  return ` The forecast ${trend === "rising" ? "rises" : trend === "falling" ? "falls" : "holds"} from about ${Math.round(f.week1)} to ${Math.round(f.week4)} ${f.unit} a week by week 4 (range ${Math.round(f.low4)}–${Math.round(f.high4)}).`;
+  const w1 = Math.round(f.week1);
+  const w4 = Math.round(f.week4);
+  const range = `likely ${Math.round(f.low4)}–${Math.round(f.high4)}`;
+  return trend === "flat"
+    ? ` ${f.unit[0].toUpperCase()}${f.unit.slice(1)} should hold near ${w4} a week over the next 4 weeks (${range}).`
+    : ` ${f.unit[0].toUpperCase()}${f.unit.slice(1)} are forecast to ${trend === "rising" ? "rise" : "fall"} from about ${w1} to ${w4} a week over the next 4 weeks (${range}).`;
 }
 
 function action(id: string, title: string, reason: string, sourceUrl: string, registryUrl?: string): PreventionAction {
@@ -210,16 +215,17 @@ export function healthTeamCandidates(ctx: HealthTeamContext): PreventionAction[]
   return list;
 }
 
-/** One line above the actions: the numbers the plan is grounded on. */
+/** One short line above the actions: the numbers the plan is grounded on,
+ *  e.g. "Risk 70/100 · #1 of 20 · 42 detections in 7 days · Cases rising · Mostly Anopheles". */
 export function healthTeamContextLine(ctx: HealthTeamContext): string {
   const parts: string[] = [];
-  if (ctx.riskScore !== null) parts.push(`Risk score ${ctx.riskScore} out of 100`);
-  if (ctx.rank !== null && ctx.districtCount !== null) parts.push(`rank ${ctx.rank} of ${ctx.districtCount}`);
-  if (ctx.detections7d !== null) parts.push(`${ctx.detections7d} detections in the last seven days`);
-  if (ctx.cases14d !== null) parts.push(`${ctx.cases14d} ${ctx.forecast?.unit ?? "cases"} / 14d`);
+  if (ctx.riskScore !== null) parts.push(`Risk ${ctx.riskScore}/100`);
+  if (ctx.rank !== null && ctx.districtCount !== null) parts.push(`#${ctx.rank} of ${ctx.districtCount}`);
+  if (ctx.detections7d !== null) parts.push(`${ctx.detections7d} detections in 7 days`);
+  // Zero usually means no case reports for the district yet, not zero cases, so it is left out.
+  if (ctx.cases14d) parts.push(`${ctx.cases14d} ${ctx.forecast?.unit ?? "cases"} in 14 days`);
   const trend = forecastTrend(ctx);
-  if (trend) parts.push(`forecast ${trend}`);
-  if (ctx.regionalGenus) parts.push(`mostly ${genusName(ctx.regionalGenus)}`);
-  if (ctx.simulated) parts.push("simulated data");
+  if (trend) parts.push(`Cases ${trend === "flat" ? "steady" : trend}`);
+  if (ctx.regionalGenus) parts.push(`Mostly ${genusName(ctx.regionalGenus)}`);
   return parts.length ? parts.join(" · ") : `${DISEASE_NAME[ctx.disease]} data unavailable`;
 }

@@ -580,7 +580,7 @@ export default function FullscreenMap({ open, startCountry, startDistrict, origi
           style={{ ...TYPE, textShadow: "0 0 4px #000, 0 0 8px #000" }}
         >
           {country === "US"
-            ? `1 dot = 1 simulated West Nile detection, last ${DOT_DAYS} days`
+            ? `1 dot = 1 West Nile detection, last ${DOT_DAYS} days`
             : `1 dot = 1 mosquito detection, last ${DOT_DAYS} days`}
         </p>
       </div>

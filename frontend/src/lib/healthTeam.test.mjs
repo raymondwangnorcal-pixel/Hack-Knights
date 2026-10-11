@@ -29,7 +29,7 @@ test("a rising forecast moves clinic readiness up to second, after the vector ac
   const actions = healthTeamCandidates({ ...base, forecast: { ...base.forecast, week4: 30, high4: 38 } });
   assert.equal(actions[0].id, "larval-sources");
   assert.equal(actions[1].id, "clinic-readiness");
-  assert.match(actions[1].reason, /rises from about 20 to 30 cases a week/);
+  assert.match(actions[1].reason, /Cases are forecast to rise from about 20 to 30 a week over the next 4 weeks/);
 });
 
 test("dengue plans start house to house and mention rain when it fell", () => {
@@ -49,9 +49,10 @@ test("West Nile plans target drains and use positive-pool units", () => {
   assert.ok(actions.some((a) => a.id === "pool-testing"));
 });
 
-test("the context line names the grounding numbers and flags simulated data", () => {
+test("the context line names the grounding numbers briefly, without a simulated-data flag", () => {
   const line = healthTeamContextLine({ ...base, regionalGenus: "anopheles", simulated: true });
-  assert.match(line, /Risk score 50 out of 100 · rank 3 of 8 · 20 detections in the last seven days · 40 cases \/ 14d · forecast flat · mostly Anopheles · simulated data/);
+  assert.equal(line, "Risk 50/100 · #3 of 8 · 20 detections in 7 days · 40 cases in 14 days · Cases steady · Mostly Anopheles");
+  assert.doesNotMatch(healthTeamContextLine({ ...base, cases14d: 0 }), /cases in 14 days/);
 });
 
 test("no forecast means no trend", () => {

@@ -402,6 +402,7 @@ export function PreventionScreen() {
 
         {/* ---------- Prevention card ---------- */}
         <PreventionCard
+          title="Action plan"
           data={shownPlan}
           language={language}
           onLanguage={setLanguage}

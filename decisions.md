@@ -1,4 +1,4 @@
-# Buzz Check / Mozzy: build decisions
+# Culicid (formerly Buzz Check / Mozzy): build decisions
 
 A running record of what we decided while building the backend, ML pipeline and data layer, and **why**. Newest work is at the bottom of each section; the change log at the end is dated. Numbers quoted here were measured, not estimated, unless marked otherwise.
 
@@ -319,3 +319,5 @@ Verified locally: missing or unknown key → 401; bad country → 400; unknown d
 - **2026-10-10:** Water term made rainfall-dependent (desert correction); country-wide dots verified in a real browser for all three countries.
 - **2026-10-11:** Wide dots re-placed in clumps; dots cluster (about 10:1) when zoomed out and expand on zoom; red scale dimmed.
 - **2026-10-11:** "How it works" page with eight hand-drawn diagrams; keyed Model API (`/api/v1/*`) added.
+- **2026-10-11:** First-visit video intro on the home page (`IntroVideo.tsx`): tap-to-enter for sound, Skip/Esc, fades into the hero; skipped on phones and for reduce-motion; `?intro=1` forces it for the stage demo, `?intro=0` hides it.
+- **2026-10-11:** Renamed Mozzy → Culicid in everything visible (titles, wordmarks, pages, docs, `/api/v1` `api` field). Internal identifiers kept so nothing breaks: `MOZZY_API_KEYS` env var, `X-Mozzy-*` headers, `mozzy-*` localStorage/cache keys.

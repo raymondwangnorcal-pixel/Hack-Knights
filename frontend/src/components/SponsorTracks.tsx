@@ -64,12 +64,35 @@ const SPONSORS: Sponsor[] = [
 const byId = (id: string) => SPONSORS.find((s) => s.id === id);
 
 /** Scroll to the sponsors section once it's on the page (it only renders on the prevention side,
- *  which may still be switching in when this is called). */
+ *  which may still be switching in when this is called). The map and lists above it are still
+ *  loading and push it down, so it re-aims a few times as the page settles, unless the visitor
+ *  starts scrolling themselves. */
 export function scrollToSponsors() {
   let tries = 0;
+  let cancelled = false;
+  const stop = () => {
+    cancelled = true;
+  };
+  const opts = { once: true, passive: true } as const;
+  window.addEventListener("wheel", stop, opts);
+  window.addEventListener("touchstart", stop, opts);
+  window.addEventListener("keydown", stop, opts);
+
+  const aim = () => {
+    if (!cancelled) scrollToId(SPONSORS_ID);
+  };
   const go = () => {
-    if (document.getElementById(SPONSORS_ID)) scrollToId(SPONSORS_ID);
-    else if (++tries < 40) setTimeout(go, 50);
+    if (document.getElementById(SPONSORS_ID)) {
+      aim();
+      [500, 1200, 2500].forEach((ms) => setTimeout(aim, ms));
+      setTimeout(() => {
+        window.removeEventListener("wheel", stop);
+        window.removeEventListener("touchstart", stop);
+        window.removeEventListener("keydown", stop);
+      }, 2600);
+    } else if (++tries < 40) {
+      setTimeout(go, 50);
+    }
   };
   go();
 }

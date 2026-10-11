@@ -231,7 +231,7 @@ function SponsorSection() {
       </div>
       <section
         aria-labelledby="sponsor-label"
-        className="flex flex-col gap-[14px] border border-[#ECE6DA]/20 px-4 pt-4 pb-6 sm:gap-[18px] sm:px-7 sm:pt-6 sm:pb-8"
+        className="flex w-full max-w-[1100px] flex-col gap-[14px] justify-self-center border border-[#ECE6DA]/20 px-4 pt-4 pb-6 sm:gap-[18px] sm:px-7 sm:pt-6 sm:pb-8"
         style={{ color: INK }}
       >
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 border-b border-[#ECE6DA]/20 pb-4 sm:pb-5">

@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
+import { scrollToId } from "@/components/SmoothScroll";
 
-// The sponsor page: one sponsor at a time, switched from the dropdown in the panel's header.
-// Same look as the home page intro. Deep links (#tiger-data, #snowflake, #gemini, #elevenlabs)
-// open straight to that sponsor.
+// Sponsors: the section under "For prevention". One sponsor at a time, switched from the dropdown
+// in the panel's header, with that sponsor's logo beside how Mozzy uses it. Same poster palette as
+// the rest of the page. Links to /#sponsors (or /sponsors) land here; #tiger-data, #snowflake,
+// #gemini and #elevenlabs land here with that sponsor open.
 
-const BG = "#13110F";
 const INK = "#ECE6DA";
 const ORANGE = "#F07636";
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 const TYPE = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 const BODY = { fontFamily: "'Roboto Condensed', var(--font-geist-sans), sans-serif" };
+
+export const SPONSORS_ID = "sponsors";
 
 type Sponsor = {
   id: string;
@@ -61,116 +63,135 @@ const SPONSORS: Sponsor[] = [
 
 const byId = (id: string) => SPONSORS.find((s) => s.id === id);
 
-export function SponsorTracks() {
+/** Scroll to the sponsors section once it's on the page (it only renders on the prevention side,
+ *  which may still be switching in when this is called). */
+export function scrollToSponsors() {
+  let tries = 0;
+  const go = () => {
+    if (document.getElementById(SPONSORS_ID)) scrollToId(SPONSORS_ID);
+    else if (++tries < 40) setTimeout(go, 50);
+  };
+  go();
+}
+
+/** The round down-arrow at the bottom of the prevention screen. */
+export function ToSponsorsArrow() {
+  return (
+    <button
+      type="button"
+      onClick={() => scrollToId(SPONSORS_ID)}
+      className="group mx-auto flex flex-col items-center gap-2 pt-2 pb-1"
+      style={{ color: INK }}
+    >
+      <span className="text-[18px] leading-none tracking-[0.12em] uppercase" style={DISPLAY}>
+        To sponsors
+      </span>
+      <span
+        className="bob-arrow flex h-11 w-11 items-center justify-center rounded-full border border-[#ECE6DA]/30 bg-[#13110F] transition-colors group-hover:border-[#ECE6DA]/80"
+        aria-hidden="true"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 4v15M5.5 12.5 12 19l6.5-6.5" />
+        </svg>
+      </span>
+    </button>
+  );
+}
+
+export function SponsorSection() {
   const [id, setId] = useState(SPONSORS[0].id);
 
-  // Open on the sponsor named in the URL hash, and follow hash changes.
+  // Arriving from a link: #sponsors scrolls here; a sponsor's id also opens that sponsor.
   useEffect(() => {
     const fromHash = () => {
-      const s = byId(window.location.hash.slice(1));
+      const hash = window.location.hash.slice(1);
+      const s = byId(hash);
       if (s) setId(s.id);
+      if (s || hash === SPONSORS_ID) scrollToSponsors();
     };
     fromHash();
     window.addEventListener("hashchange", fromHash);
     return () => window.removeEventListener("hashchange", fromHash);
   }, []);
 
-  const pick = (next: string) => {
-    setId(next);
-    window.history.replaceState(null, "", `#${next}`);
-  };
-
   const s = byId(id) ?? SPONSORS[0];
 
   return (
-    <div className="flex min-h-screen flex-col" style={{ backgroundColor: BG, color: INK }}>
-      <header className="border-b border-[#ECE6DA]/20">
-        <div className="mx-auto flex max-w-[1216px] items-center justify-between gap-4 px-4 py-[18px] sm:px-8">
-          <Link href="/" className="text-[44px] leading-none tracking-wide" style={DISPLAY}>
-            Mozzy
-          </Link>
-          <Link
-            href="/"
-            className="rounded-full px-[22px] pt-[13px] pb-[11px] text-base leading-none tracking-wider text-[#13110F] uppercase transition-opacity hover:opacity-85"
-            style={{ ...DISPLAY, backgroundColor: INK }}
+    <section
+      id={SPONSORS_ID}
+      aria-labelledby="sponsor-label"
+      className="flex scroll-mt-[86px] flex-col gap-[14px] border border-[#ECE6DA]/20 px-4 pt-4 pb-6 sm:gap-[18px] sm:px-7 sm:pt-6 sm:pb-8 lg:scroll-mt-[52px]"
+      style={{ color: INK }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 border-b border-[#ECE6DA]/20 pb-4 sm:pb-5">
+        <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+          <span className="text-[22px] leading-none tracking-[0.18em] uppercase sm:text-[26px]" style={{ ...DISPLAY, color: ORANGE }}>
+            Sponsors
+          </span>
+          <label
+            id="sponsor-label"
+            htmlFor="sponsor-select"
+            className="text-[11px] tracking-[0.18em] text-[#ECE6DA]/80 uppercase"
+            style={TYPE}
           >
-            Back to Mozzy
-          </Link>
+            {s.label}
+          </label>
         </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-[1216px] px-4 pt-8 pb-7 sm:px-8 sm:pt-14 sm:pb-[72px]">
-        <section
-          aria-labelledby="sponsor-label"
-          className="flex flex-col gap-[14px] border border-[#ECE6DA]/20 px-5 py-6 sm:gap-[18px] sm:p-10"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 border-b border-[#ECE6DA]/20 pb-[18px]">
-            <label
-              id="sponsor-label"
-              htmlFor="sponsor-select"
-              className="text-[11px] tracking-[0.18em] text-[#ECE6DA]/80 uppercase"
-              style={TYPE}
-            >
-              {s.label}
-            </label>
-            <span className="relative inline-flex w-full min-[481px]:w-auto">
-              <select
-                id="sponsor-select"
-                value={id}
-                onChange={(e) => pick(e.target.value)}
-                className="min-h-12 w-full cursor-pointer appearance-none rounded-full border border-[#ECE6DA]/20 bg-[#13110F] pt-[13px] pr-12 pb-[11px] pl-5 text-xl leading-none tracking-wider text-[#ECE6DA] uppercase hover:border-[#ECE6DA]/60 focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[#F07636] min-[481px]:w-auto min-[481px]:min-w-[240px]"
-                style={DISPLAY}
-              >
-                {SPONSORS.map((o) => (
-                  <option key={o.id} value={o.id} className="bg-[#13110F] normal-case" style={BODY}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 right-5 -translate-y-1/2 text-base"
-                style={{ color: ORANGE }}
-              >
-                ▾
-              </span>
-            </span>
-          </div>
-
-          <div
-            key={s.id}
-            className="sponsor-fade grid grid-cols-1 items-center gap-6 md:grid-cols-[minmax(0,1fr)_clamp(220px,28vw,320px)] md:gap-10"
+        <span className="relative inline-flex w-full min-[481px]:w-auto">
+          <select
+            id="sponsor-select"
+            value={id}
+            onChange={(e) => setId(e.target.value)}
+            className="min-h-12 w-full cursor-pointer appearance-none rounded-full border border-[#ECE6DA]/20 bg-[#13110F] pt-[13px] pr-12 pb-[11px] pl-5 text-xl leading-none tracking-wider text-[#ECE6DA] uppercase hover:border-[#ECE6DA]/60 focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[#F07636] min-[481px]:w-auto min-[481px]:min-w-[240px]"
+            style={DISPLAY}
           >
-            <div className="flex min-w-0 flex-col gap-[14px] sm:gap-[18px]">
-              <h1
-                className="m-0 text-[clamp(56px,10vw,104px)] leading-[0.85] tracking-wide uppercase"
-                style={{ ...DISPLAY, color: ORANGE }}
-              >
-                {s.name}
-              </h1>
-              <h2
-                className="m-0 text-[clamp(26px,4vw,36px)] leading-[1.05] tracking-wide text-balance uppercase"
-                style={DISPLAY}
-              >
-                {s.headline}
-              </h2>
-              <p className="m-0 max-w-[62ch] text-[21px] leading-[1.55] font-light text-[#ECE6DA]/90" style={BODY}>
-                {s.body}
-              </p>
-            </div>
-            <div className="order-first grid aspect-square w-[140px] place-items-center md:order-none md:w-auto md:p-4">
-              <Image
-                src={s.logo.src}
-                alt={`${s.name} logo`}
-                width={s.logo.width}
-                height={s.logo.height}
-                className="h-auto max-h-full w-auto max-w-full object-contain"
-                priority
-              />
-            </div>
-          </div>
-        </section>
-      </main>
-    </div>
+            {SPONSORS.map((o) => (
+              <option key={o.id} value={o.id} className="bg-[#13110F] normal-case" style={BODY}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 right-5 -translate-y-1/2 text-base"
+            style={{ color: ORANGE }}
+          >
+            ▾
+          </span>
+        </span>
+      </div>
+
+      <div
+        key={s.id}
+        className="sponsor-fade grid grid-cols-1 items-center gap-6 md:grid-cols-[minmax(0,1fr)_clamp(220px,28vw,320px)] md:gap-10"
+      >
+        <div className="flex min-w-0 flex-col gap-[14px] sm:gap-[18px]">
+          <h2
+            className="m-0 text-[clamp(56px,10vw,104px)] leading-[0.85] tracking-wide uppercase"
+            style={{ ...DISPLAY, color: ORANGE }}
+          >
+            {s.name}
+          </h2>
+          <h3
+            className="m-0 text-[clamp(26px,4vw,36px)] leading-[1.05] tracking-wide text-balance uppercase"
+            style={DISPLAY}
+          >
+            {s.headline}
+          </h3>
+          <p className="m-0 max-w-[62ch] text-[21px] leading-[1.55] font-light text-[#ECE6DA]/90" style={BODY}>
+            {s.body}
+          </p>
+        </div>
+        <div className="order-first grid aspect-square w-[140px] place-items-center md:order-none md:w-auto md:p-4">
+          <Image
+            src={s.logo.src}
+            alt={`${s.name} logo`}
+            width={s.logo.width}
+            height={s.logo.height}
+            className="h-auto max-h-full w-auto max-w-full object-contain"
+          />
+        </div>
+      </div>
+    </section>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { RollingNumber } from "@/components/RollingNumber";
 
 // The intro's masthead, pinned to the top of the window. As the first screen scrolls away the
@@ -66,12 +65,15 @@ export function StickyBar({
   trackId,
   counters,
   onPick,
+  onSponsors,
   side,
   onSide,
 }: {
   trackId: string;
   counters: [Counter, Counter];
   onPick: (side: Side) => void;
+  /** The Sponsors tab: jump to the sponsors section under "For prevention". */
+  onSponsors: () => void;
   /** Which side the page below is showing; drives the header toggle once you scroll. */
   side: Side;
   onSide: (side: Side) => void;
@@ -158,9 +160,9 @@ export function StickyBar({
           <button onClick={() => onPick("prevention")} className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
             For prevention
           </button>
-          <Link href="/sponsors" className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
+          <button onClick={onSponsors} className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
             Sponsors
-          </Link>
+          </button>
           <button
             onClick={() => onPick("you")}
             className="ml-1 rounded-sm px-4 py-1.5 text-base tracking-wider whitespace-nowrap text-[#13110F] transition-opacity hover:opacity-85"

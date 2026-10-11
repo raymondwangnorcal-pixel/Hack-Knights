@@ -1,11 +1,6 @@
-import type { Metadata } from "next";
-import { SponsorTracks } from "@/components/SponsorTracks";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Mozzy · Sponsor tracks",
-  description: "How Mozzy uses Tiger Data, Snowflake, Gemini and ElevenLabs.",
-};
-
+// Sponsors now live on the landing page, under "For prevention".
 export default function SponsorsPage() {
-  return <SponsorTracks />;
+  redirect("/?side=prevention#sponsors");
 }

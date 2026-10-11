@@ -6,7 +6,7 @@ import type { Detection, DistrictRisk } from "@/lib/types";
 
 const RiskHeatMapClient = dynamic(() => import("./RiskHeatMapClient"), {
   ssr: false,
-  loading: () => <div className="flex h-[520px] w-full items-center justify-center">Loading map…</div>,
+  loading: () => <div className="flex h-full w-full items-center justify-center">Loading map…</div>,
 });
 
 interface RiskHeatMapProps {
@@ -20,7 +20,7 @@ interface RiskHeatMapProps {
 
 export default function RiskHeatMap(props: RiskHeatMapProps) {
   if (!props.districts.length) {
-    return <div className="flex h-[520px] w-full items-center justify-center">No data</div>;
+    return <div className="flex h-full w-full items-center justify-center">No data</div>;
   }
   return <RiskHeatMapClient key={props.districts[0].country} {...props} />;
 }

@@ -5,12 +5,14 @@ export interface City {
   lat: number;
   lng: number;
   hasData?: boolean;
+  /** Zoom when this city is clicked; defaults to CITY_ZOOM. Cities with data frame all their districts. */
+  zoom?: number;
 }
 
 // Cities shown on the map and in the side menu. Cities with detection data are highlighted.
 export const CITIES: Record<Country, City[]> = {
   NG: [
-    { name: "Lagos", lat: 6.5244, lng: 3.3792, hasData: true },
+    { name: "Lagos", lat: 6.5244, lng: 3.3792, hasData: true, zoom: 11.1 },
     { name: "Abuja", lat: 9.0765, lng: 7.3986 },
     { name: "Kano", lat: 12.0022, lng: 8.592 },
     { name: "Ibadan", lat: 7.3775, lng: 3.947 },
@@ -21,7 +23,7 @@ export const CITIES: Record<Country, City[]> = {
     { name: "Enugu", lat: 6.4584, lng: 7.5464 },
   ],
   BR: [
-    { name: "São Paulo", lat: -23.5505, lng: -46.6333, hasData: true },
+    { name: "São Paulo", lat: -23.5505, lng: -46.6333, hasData: true, zoom: 9.8 },
     { name: "Rio de Janeiro", lat: -22.9068, lng: -43.1729 },
     { name: "Brasília", lat: -15.7939, lng: -47.8828 },
     { name: "Salvador", lat: -12.9777, lng: -38.5016 },
@@ -34,7 +36,7 @@ export const CITIES: Record<Country, City[]> = {
     { name: "Belém", lat: -1.4558, lng: -48.4902 },
   ],
   US: [
-    { name: "New York", lat: 40.7128, lng: -74.006, hasData: true },
+    { name: "New York", lat: 40.7128, lng: -74.006, hasData: true, zoom: 11.1 },
     { name: "Los Angeles", lat: 34.0522, lng: -118.2437 },
     { name: "Chicago", lat: 41.8781, lng: -87.6298 },
     { name: "Houston", lat: 29.7604, lng: -95.3698 },

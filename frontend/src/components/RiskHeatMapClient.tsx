@@ -4,6 +4,8 @@ import L from "leaflet";
 import countryShapes from "@/lib/countryShapes.json";
 import { CITIES, type City, type MapFocus } from "@/lib/cities";
 import type { Country, Detection, DistrictRisk } from "@/lib/types";
+import { DOT_CORE, DOT_EDGE } from "@/lib/dotColors";
+import { DISEASE_LABEL, GENUS_INFO } from "@/lib/species";
 import "leaflet/dist/leaflet.css";
 
 interface RiskHeatMapClientProps {
@@ -24,9 +26,11 @@ type MapInternals = L.Map & {
   _limitCenter(center: L.LatLng, zoom: number, bounds: L.LatLngBounds | null): L.LatLng;
 };
 
-const ZOOM_PER_WHEEL_PX = 1 / 150;
-const EASE = 0.25;
+const ZOOM_PER_WHEEL_PX = 1 / 150; // a mouse-wheel notch (~100 px) is about two thirds of a zoom level
+const ZOOM_PER_TRACKPAD_PX = 1 / 70; // pinch and two-finger scroll send many small deltas, so each counts for more
+const EASE = 0.3;
 const SHOW_DISTRICT_CIRCLES = false;
+const TOP_CLEARANCE = 70; // px kept free at the top for the title floating over the map
 
 function riskColor(riskScore: number): string {
   return `hsl(${Math.max(0, 40 - riskScore * 0.4)} 90% 50%)`;
@@ -81,7 +85,11 @@ function SmoothWheelZoom() {
       }
       anchorPoint = map.mouseEventToContainerPoint(e);
       anchorLatLng = map.containerPointToLatLng(anchorPoint);
-      const target = goal + L.DomEvent.getWheelDelta(e) * ZOOM_PER_WHEEL_PX;
+      // A trackpad pinch arrives as ctrl+wheel; trackpad scrolling as small pixel deltas. Mouse wheels send
+      // big (or line-based) steps. Using one gain for all of them made pinching feel heavy.
+      const trackpad = e.ctrlKey || (e.deltaMode === 0 && Math.abs(e.deltaY) < 50);
+      const gain = trackpad ? ZOOM_PER_TRACKPAD_PX * (e.ctrlKey ? 1.15 : 1) : ZOOM_PER_WHEEL_PX;
+      const target = goal + L.DomEvent.getWheelDelta(e) * gain;
       goal = Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), target));
     };
 
@@ -96,6 +104,8 @@ function SmoothWheelZoom() {
 
   return null;
 }
+
+const DISTRICT_LABEL_ZOOM = 9.5; // from here on, district labels replace city labels
 
 // Labels live in their own layer above the black mask and the dots, repositioned every frame.
 function CityLabels({ country, onSelect }: { country: Country; onSelect: (c: City) => void }) {
@@ -123,6 +133,7 @@ function CityLabels({ country, onSelect }: { country: Country; onSelect: (c: Cit
     });
 
     const place = () => {
+      layer.style.display = map.getZoom() >= DISTRICT_LABEL_ZOOM ? "none" : "";
       for (const { c, el } of items) {
         const p = map.latLngToContainerPoint([c.lat, c.lng]);
         el.style.transform = `translate(${p.x - 4}px, ${p.y}px) translateY(-50%)`;
@@ -136,6 +147,60 @@ function CityLabels({ country, onSelect }: { country: Country; onSelect: (c: Cit
       layer.remove();
     };
   }, [map, country]);
+
+  return null;
+}
+
+// Districts with data are picked on the map (there is no list any more): once zoomed in, each one gets
+// a small label coloured by its risk; clicking selects it. Hidden when zoomed out, where city labels are.
+function DistrictLabels({
+  districts,
+  selected,
+  onSelect,
+}: {
+  districts: DistrictRisk[];
+  selected?: string;
+  onSelect: (d: DistrictRisk) => void;
+}) {
+  const map = useMap();
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  });
+
+  useEffect(() => {
+    const layer = document.createElement("div");
+    layer.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:455;overflow:hidden";
+    map.getContainer().appendChild(layer);
+
+    const items = districts.map((d) => {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.title = `${d.district}: risk ${d.risk_score}/100`;
+      el.className = `district-label${d.district === selected ? " district-label--selected" : ""}`;
+      el.innerHTML = `<span class="district-name"></span><span class="district-score"></span>`;
+      (el.children[0] as HTMLElement).textContent = d.district;
+      (el.children[1] as HTMLElement).textContent = `${d.risk_score}`;
+      (el.children[1] as HTMLElement).style.color = riskColor(d.risk_score);
+      el.addEventListener("click", () => onSelectRef.current(d));
+      layer.appendChild(el);
+      return { d, el };
+    });
+
+    const place = () => {
+      layer.style.display = map.getZoom() >= DISTRICT_LABEL_ZOOM ? "" : "none";
+      for (const { d, el } of items) {
+        const p = map.latLngToContainerPoint([d.lat, d.lng]);
+        el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
+      }
+    };
+    place();
+    map.on("move zoom resize", place);
+    return () => {
+      map.off("move zoom resize", place);
+      layer.remove();
+    };
+  }, [map, districts, selected]);
 
   return null;
 }
@@ -177,8 +242,6 @@ const DOT_RADIUS_AT_FIT = 3;
 const DOT_MIN_RADIUS = 2.5;
 const DOT_MAX_RADIUS = 7;
 const DOT_GROWTH_PER_ZOOM = 1.2;
-const DOT_CORE: [number, number, number] = [196, 30, 38];
-const DOT_EDGE: [number, number, number] = [252, 165, 165];
 
 // Dark red near the average position of a district's detections, fading to light red at its edge.
 function dotColors(detections: Detection[]): Map<string, string> {
@@ -249,6 +312,196 @@ function countryRings(country: Country): Ring[] {
   return rings;
 }
 
+// ---- Boundary lines: states / provinces zoomed out, districts / counties / municipalities zoomed in.
+// Built by scripts/build_map_lines.py into public/geo; loaded once per country and kept as
+// web-mercator (0..1) coordinates like the country outline, so each frame is a scale and an offset.
+interface Line {
+  xs: Float64Array;
+  ys: Float64Array;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+type Level = "adm1" | "adm2";
+const lineCache = new Map<string, Promise<Line[]>>();
+
+function loadLines(country: Country, level: Level): Promise<Line[]> {
+  const key = `${country}-${level}`;
+  let hit = lineCache.get(key);
+  if (!hit) {
+    hit = fetch(`/geo/${key}.json`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`/geo/${key}.json returned ${r.status}: run scripts/build_map_lines.py`);
+        return r.json() as Promise<{ lines: number[][] }>;
+      })
+      .then(({ lines }) =>
+        lines.map((flat) => {
+          const n = flat.length / 2;
+          const xs = new Float64Array(n);
+          const ys = new Float64Array(n);
+          for (let i = 0; i < n; i++) {
+            const lat = Math.max(-85.05, Math.min(85.05, flat[2 * i + 1]));
+            xs[i] = (flat[2 * i] + 180) / 360;
+            ys[i] = 0.5 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / (2 * Math.PI);
+          }
+          return { xs, ys, minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+        }),
+      );
+    hit.catch((err) => {
+      lineCache.delete(key); // retry next time instead of caching the failure
+      console.error("[map] could not load boundary lines", err);
+    });
+    lineCache.set(key, hit);
+  }
+  return hit;
+}
+
+// How the lines fade with zoom, relative to the zoom at which the whole country fits.
+const ADM1_ALPHA = 0.3;
+const ADM2_ALPHA = 0.2;
+const ADM2_START = 1.0; // zoom levels past "whole country" where district lines begin to appear
+const ADM2_FULL = 2.5;
+
+function strokeLines(
+  ctx: CanvasRenderingContext2D,
+  lines: Line[],
+  scale: number,
+  ox: number,
+  oy: number,
+  w: number,
+  h: number,
+  alpha: number,
+  width: number,
+) {
+  if (alpha <= 0.005) return;
+  const path = new Path2D();
+  for (const l of lines) {
+    if (l.maxX * scale + ox < 0 || l.minX * scale + ox > w || l.maxY * scale + oy < 0 || l.minY * scale + oy > h) continue;
+    path.moveTo(l.xs[0] * scale + ox, l.ys[0] * scale + oy);
+    for (let i = 1; i < l.xs.length; i++) path.lineTo(l.xs[i] * scale + ox, l.ys[i] * scale + oy);
+  }
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = "rgb(236, 230, 218)";
+  ctx.lineWidth = width;
+  ctx.lineJoin = "round";
+  ctx.stroke(path);
+  ctx.globalAlpha = 1;
+}
+
+// ---- Topography: Esri hillshade tiles. The tiles are near-white with faint slope shadows, so each
+// one is turned into a transparent-black shading layer (darker slope = more alpha) and drawn over the gray
+// country shape, clipped to its outline. Own canvas rather than a tile layer, so it stays under the dots and lines.
+const RELIEF_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile";
+const RELIEF_STRENGTH = 0.4; // peak darkness of the steepest shadows (0–1); "subtle" lives here
+const RELIEF_CONTRAST = 55; // tile brightness drop (out of 255) that counts as a full shadow
+const RELIEF_MAX_Z = 9;
+const reliefTiles = new Map<string, HTMLCanvasElement | "loading" | "failed">();
+
+function reliefTile(z: number, x: number, y: number, onLoad: () => void): HTMLCanvasElement | null {
+  const key = `${z}/${x}/${y}`;
+  const hit = reliefTiles.get(key);
+  if (hit === "failed" || hit === "loading") return null;
+  if (hit) return hit;
+  reliefTiles.set(key, "loading");
+  const img = new Image();
+  img.crossOrigin = "anonymous"; // the tiles allow it; needed to read their pixels
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const cx = c.getContext("2d")!;
+    cx.drawImage(img, 0, 0);
+    const px = cx.getImageData(0, 0, c.width, c.height);
+    for (let i = 0; i < px.data.length; i += 4) {
+      const shadow = Math.min(1, Math.max(0, (255 - px.data[i]) / RELIEF_CONTRAST));
+      px.data[i] = px.data[i + 1] = px.data[i + 2] = 0;
+      px.data[i + 3] = Math.round(shadow * RELIEF_STRENGTH * 255);
+    }
+    cx.putImageData(px, 0, 0);
+    reliefTiles.set(key, c);
+    onLoad();
+  };
+  img.onerror = () => {
+    reliefTiles.set(key, "failed");
+    console.error(`[map] relief tile ${key} failed to load`);
+  };
+  img.src = `${RELIEF_URL}/${z}/${y}/${x}`;
+  return null;
+}
+
+function drawRelief(
+  ctx: CanvasRenderingContext2D,
+  outline: Path2D,
+  zoom: number,
+  scale: number,
+  ox: number,
+  oy: number,
+  w: number,
+  h: number,
+  alpha: number,
+  onLoad: () => void,
+) {
+  if (alpha <= 0.005) return;
+  const tz = Math.min(RELIEF_MAX_Z, Math.max(2, Math.round(zoom)));
+  const n = 2 ** tz;
+  const size = scale / n;
+  const x0 = Math.max(0, Math.floor(-ox / size));
+  const x1 = Math.min(n - 1, Math.floor((w - ox) / size));
+  const y0 = Math.max(0, Math.floor(-oy / size));
+  const y1 = Math.min(n - 1, Math.floor((h - oy) / size));
+  ctx.save();
+  ctx.clip(outline);
+  ctx.globalAlpha = alpha;
+  for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y <= y1; y++) {
+      const img = reliefTile(tz, x, y, onLoad);
+      // +0.5px overlap hides hairline seams between tiles
+      if (img) ctx.drawImage(img, x * size + ox, y * size + oy, size + 0.5, size + 0.5);
+    }
+  }
+  ctx.restore();
+}
+
+// ---- Clicking a dot: a small card with what the detection was (all from the detection row).
+function timeAgo(iso: string): string {
+  const mins = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+  if (mins < 2) return "just now";
+  if (mins < 60) return `${mins} minutes ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+function fillTip(tip: HTMLElement, o: Detection, onClose: () => void) {
+  const info = GENUS_INFO[o.genus] ?? GENUS_INFO.other;
+  const line = (cls: string, text: string) => {
+    const el = document.createElement("div");
+    el.className = cls;
+    el.textContent = text;
+    return el;
+  };
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "dot-tip-close";
+  close.setAttribute("aria-label", "Close");
+  close.textContent = "×";
+  close.addEventListener("click", onClose);
+  const sure = o.confidence ? ` · ${Math.round(o.confidence * 100)}% sure` : "";
+  const carries = info.diseases.length ? `Can carry ${info.diseases.map((d) => DISEASE_LABEL[d].toLowerCase()).join(", ")}` : "";
+  const how = `${o.source === "trap" ? "Smart trap" : "Phone recording"}${o.is_simulated ? " · simulated demo data" : ""}`;
+  tip.replaceChildren(
+    close,
+    line("dot-tip-title", o.species ?? `${info.label} mosquito`),
+    line("dot-tip-sub", `${info.label}${sure}`),
+    line("dot-tip-row", `Heard ${timeAgo(o.time)} in ${o.district}`),
+    ...(carries ? [line("dot-tip-row", carries)] : []),
+    line("dot-tip-fine", how),
+    ...(o.species ? [line("dot-tip-fine", "Species is the closest match; the genus is the reliable part")] : []),
+  );
+}
+
 function MapOverlay({ country, detections }: { country: Country; detections: Detection[] }) {
   const map = useMap();
   const fitZoom = useRef<number | null>(null);
@@ -271,6 +524,67 @@ function MapOverlay({ country, detections }: { country: Country; detections: Det
     canvas.style.cssText = "position:absolute;top:0;left:0;pointer-events:none;z-index:401";
     map.getContainer().appendChild(canvas);
     const ctx = canvas.getContext("2d")!;
+
+    // Clicking a dot picks it: a ring on the dot and a card that follows it as the map moves.
+    const container = map.getContainer();
+    let picked: Detection | null = null;
+    const tip = document.createElement("div");
+    tip.className = "dot-tip";
+    tip.style.display = "none";
+    container.appendChild(tip);
+    L.DomEvent.disableClickPropagation(tip);
+    L.DomEvent.disableScrollPropagation(tip);
+    const hit = (pt: L.Point): Detection | null => {
+      let best: Detection | null = null;
+      let bestDist = radius() + 5; // a little slack so small dots are easy to hit
+      for (const o of detections) {
+        const p = map.latLngToContainerPoint([o.lat, o.lng]);
+        const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+        if (d <= bestDist) {
+          bestDist = d;
+          best = o;
+        }
+      }
+      return best;
+    };
+    const placeTip = () => {
+      if (!picked) return;
+      const p = map.latLngToContainerPoint([picked.lat, picked.lng]);
+      const below = p.y < 190; // flip under the dot near the top edge
+      tip.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, ${below ? "16px" : "calc(-100% - 16px)"})`;
+    };
+    const pick = (o: Detection | null) => {
+      picked = o;
+      if (o) fillTip(tip, o, () => pick(null));
+      tip.style.display = o ? "" : "none";
+      placeTip();
+      redraw();
+    };
+    const onClick = (e: L.LeafletMouseEvent) => pick(hit(e.containerPoint));
+    const onHover = (e: L.LeafletMouseEvent) => {
+      container.style.cursor = hit(e.containerPoint) ? "pointer" : "";
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && pick(null);
+    map.on("click", onClick);
+    map.on("mousemove", onHover);
+    document.addEventListener("keydown", onKey);
+
+    let adm1: Line[] = [];
+    let adm2: Line[] = [];
+    let queued = 0;
+    const redraw = () => {
+      cancelAnimationFrame(queued);
+      queued = requestAnimationFrame(() => draw());
+    };
+    let alive = true;
+    loadLines(country, "adm1").then((l) => alive && ((adm1 = l), redraw()), () => {});
+    // District lines are the big file (Brazil: 2 MB): fetched only once zoomed in far enough to see them.
+    let adm2Requested = false;
+    const wantAdm2 = () => {
+      if (adm2Requested || map.getZoom() < base + ADM2_START - 0.3) return;
+      adm2Requested = true;
+      loadLines(country, "adm2").then((l) => alive && ((adm2 = l), redraw()), () => (adm2Requested = false));
+    };
 
     const draw = () => {
       const size = map.getSize();
@@ -306,10 +620,19 @@ function MapOverlay({ country, detections }: { country: Country; detections: Det
         }
         outline.closePath();
       }
-      ctx.globalAlpha = 1 - Math.min(1, Math.max(0, (map.getZoom() - TILE_FADE_START) / TILE_FADE_RANGE));
+      const zoom = map.getZoom();
+      wantAdm2();
+      // Everything on the gray shape fades out together once the street tiles take over.
+      const shape = 1 - Math.min(1, Math.max(0, (zoom - TILE_FADE_START) / TILE_FADE_RANGE));
+      ctx.globalAlpha = shape;
       ctx.fillStyle = COUNTRY_GRAY;
       ctx.fill(outline);
       ctx.globalAlpha = 1;
+      drawRelief(ctx, outline, zoom, scale, ox, oy, size.x, size.y, shape * (1 - 0.65 * Math.min(1, Math.max(0, (zoom - 7.5) / 2.5))), redraw);
+      // States first (visible zoomed out), then districts as you zoom in; both thin out under the street tiles.
+      const into = (zoom - base - ADM2_START) / (ADM2_FULL - ADM2_START);
+      strokeLines(ctx, adm1, scale, ox, oy, size.x, size.y, ADM1_ALPHA * (0.5 + 0.5 * shape), 1);
+      strokeLines(ctx, adm2, scale, ox, oy, size.x, size.y, ADM2_ALPHA * Math.min(1, Math.max(0, into)) * shape, 0.75);
       ctx.strokeStyle = "rgba(236, 230, 218, 0.3)";
       ctx.lineWidth = 1;
       ctx.stroke(outline);
@@ -323,12 +646,29 @@ function MapOverlay({ country, detections }: { country: Country; detections: Det
         ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
         ctx.fill();
       }
+      if (picked) {
+        const p = map.latLngToContainerPoint([picked.lat, picked.lng]);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = "#ECE6DA";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r + 4, 0, Math.PI * 2);
+        ctx.stroke();
+        placeTip();
+      }
     };
 
     draw();
     map.on("move zoom resize", draw);
     return () => {
+      alive = false;
+      cancelAnimationFrame(queued);
       map.off("move zoom resize", draw);
+      map.off("click", onClick);
+      map.off("mousemove", onHover);
+      document.removeEventListener("keydown", onKey);
+      container.style.cursor = "";
+      tip.remove();
       canvas.remove();
     };
   }, [map, detections, country]);
@@ -341,7 +681,7 @@ function FitToCountry({ country }: { country: Country }) {
 
   useEffect(() => {
     const bounds = L.latLngBounds(COUNTRY_VIEW[country]);
-    map.fitBounds(bounds, { padding: [8, 8], animate: false });
+    map.fitBounds(bounds, { paddingTopLeft: [8, TOP_CLEARANCE], paddingBottomRight: [8, 8], animate: false });
     // No zooming out past the whole country, and no panning away from it.
     map.setMinZoom(map.getZoom() - 0.3);
     map.setMaxBounds(bounds.pad(0.1));
@@ -356,7 +696,7 @@ function FlyToFocus({ focus, country }: { focus?: MapFocus | null; country: Coun
   useEffect(() => {
     if (!focus) return;
     if (focus.reset) {
-      map.flyToBounds(L.latLngBounds(COUNTRY_VIEW[country]), { padding: [8, 8], duration: 1.2 });
+      map.flyToBounds(L.latLngBounds(COUNTRY_VIEW[country]), { paddingTopLeft: [8, TOP_CLEARANCE], paddingBottomRight: [8, 8], duration: 1.2 });
     } else {
       map.flyTo([focus.lat, focus.lng], focus.zoom, { duration: 1.2 });
     }
@@ -377,7 +717,7 @@ export default function RiskHeatMapClient({
 }: RiskHeatMapClientProps) {
   const country = districts[0].country;
   return (
-    <>
+    <div className="relative h-full w-full" data-lenis-prevent>
     <MapContainer
       center={L.latLngBounds(COUNTRY_VIEW[country]).getCenter()}
       zoom={5}
@@ -387,9 +727,11 @@ export default function RiskHeatMapClient({
       zoomAnimation={false}
       maxBoundsViscosity={1}
       scrollWheelZoom={false}
+      zoomControl={false}
+      attributionControl={false}
       preferCanvas
       className="risk-map"
-      style={{ width: "100%", height: 520 }}
+      style={{ width: "100%", height: "100%" }}
     >
       <StreetTiles />
       <SmoothWheelZoom />
@@ -430,25 +772,9 @@ export default function RiskHeatMapClient({
           </Circle>
         );
       })}
+      <DistrictLabels districts={districts} selected={selected} onSelect={onSelect} />
       <MapOverlay country={country} detections={detections} />
     </MapContainer>
-    <div
-      className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] uppercase tracking-widest opacity-80"
-      style={{ fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" }}
-    >
-      <span>1 dot = 1 mosquito detection, last 7 days</span>
-      <span className="flex items-center gap-2">
-        Center
-        <span
-          className="inline-block h-2 w-20 rounded-sm"
-          style={{
-            background: `linear-gradient(to right, rgb(${DOT_CORE.join(" ")}), rgb(${DOT_EDGE.join(" ")}))`,
-          }}
-        />
-        Outskirts
-      </span>
-      <span>More dots = higher risk</span>
     </div>
-    </>
   );
 }

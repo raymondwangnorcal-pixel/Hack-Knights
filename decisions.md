@@ -238,6 +238,44 @@ Decisions: one background `LISTEN` connection reconnects every 3 s on failure an
 | Sample-button uploads are sent with `device='sample'` and stored with `is_simulated = true` (`SIMULATED_DEVICES` in `backend/app/main.py`). | They were stored as real detections. Three taps in a district would have made the prevention panel report "recent district detections" from a canned clip. **Needs a backend redeploy to take effect on Railway.** |
 | The prevention panel shows "Regional prevalence unavailable" for now. | Intended: it counts only real, confident detections, and every detection in Tiger is seeded. It switches on once real phone recordings arrive. |
 
+## 14. Dashboard map redesign (2026-10-10)
+
+| Decision | Why |
+| --- | --- |
+| The map fills the screen (full width, 92% of the viewport height); the title, country switch and legend float on it. The side city list and the "Simulated data" box are gone. | The map is the product; a boxed component with a sidebar made it feel tacked on. Cities are picked on the map. |
+| Simulated status moved into the legend line ("... · simulated data"), shown whenever the risk response says any input is simulated. | Seeded detections must stay labelled on screen (spec), but not as a box over the map. |
+| State / province lines when zoomed out; district / county / municipality lines fade in from about 1 zoom level past "whole country"; street tiles (already present) take over from zoom 10. | More detail as you zoom, as asked. Lines are geoBoundaries ADM1 / ADM2, simplified by `scripts/build_map_lines.py` into `frontend/public/geo/<CC>-adm1.json` and `-adm2.json`. District files are fetched lazily (Brazil's is 2.4 MB). |
+| Topography = Esri hillshade tiles, converted to a transparent-black shading layer and drawn on the map canvas, clipped to the country shape. It fades by about 65% toward city zoom and disappears under the street tiles. | The tiles are near-white (mean brightness 251), so blending them in did nothing; mapping slope shadow to alpha gives subtle relief. Own canvas so it stays under the dots and lines. |
+| District selection moved onto the map: once zoomed in (zoom >= 9.5), each district gets a label with its risk score; click to select (forecast and plan below the map follow). City labels hide at that zoom. Cities with data have their own click zoom (Lagos 11.1, São Paulo 9.8, New York 11.1) so all districts are in frame. | Replaces the removed list; São Paulo at the old zoom 13 showed only 3 dots. |
+| Zoom buttons moved to bottom-right; the country fit leaves 70 px clear at the top. | They overlapped the title, and the country shape ran under it. |
+
+**Needs a dev-server restart** if the new `.risk-map` styles don't show (the CSS cache went stale once). Regenerate lines with `python3 scripts/build_map_lines.py` (downloads ADM1 with curl if missing).
+
+**Map interaction pass (2026-10-10):**
+
+| Decision | Why |
+| --- | --- |
+| The map's wrapper has `data-lenis-prevent`. | Lenis (the site's smooth page scroll) listens on the whole window and scrolled the page even though the map handled the wheel. The attribute makes Lenis ignore anything over the map; wheel there only zooms, wheel elsewhere scrolls the page. |
+| Zoom gain depends on the input: mouse wheel 1/150 per px (unchanged), trackpad scroll 1/70, pinch (ctrl+wheel) about 1/61. Eased at 0.3 per frame. | Pinch and trackpad send many small deltas; one gain tuned for a mouse wheel made them feel heavy. The pinch gain is about Mapbox's. |
+| Colour key moved to the bottom right (beside the zoom buttons) as a fixed overlay; the "1 dot = ..." sentence stays bottom left. | They were close enough to read as one sentence. As a page overlay (not inside the map), the key stays still while maps slide. |
+| Switching country slides horizontally (`SlideStage`, 900 ms, `cubic-bezier(0.76, 0, 0.18, 1)`): the old map glides out as the new one glides in. Arrows at the left and right edges step through Nigeria, Brazil and USA and wrap around; the buttons slide the matching direction. Clicks are ignored mid-slide. | The requested swish. All three countries' data is fetched at page load so a switch never waits on the network. |
+| The selected district is derived (picked district if it belongs to the shown country, else the top-ranked one) instead of being set in an effect. | Avoids a flash of the old country's district during the slide. |
+
+**Full-page map pass (2026-10-10):**
+
+| Decision | Why |
+| --- | --- |
+| The dashboard is one full-screen map (no page scroll). The forecast chart and recommended actions live in a card docked bottom-left: a pill ("district · forecast & actions") that opens into a two-column card (chart, actions) with a close button. Clicking a district on the map opens it. | Map as the whole page, with the detail inside the UI instead of under it. Closed by default so the map stays clear. |
+| Leaflet's attribution box is replaced by a static credit line (white mono text, no background, flag removed) at the bottom right; zoom +/- are page-level buttons that send the map the same eased wheel zoom (1 click = 1 level). | They stay still while maps slide, and match the other text. The Leaflet / Esri / OpenStreetMap credit wording is kept (licence requirement). |
+| `SlideStage` keeps all three maps mounted, parked off-screen, and slides them with `transform` only (1500 ms, easeInOutSine). Before it creates a map mid-slide, so Leaflet setup, tile loading and layout were fighting the animation. Maps left zoomed on a city reset to the country view after the slide. | Measured in headless Chrome: 132 frames over the slide, 16.8 ms average, one frame at 33 ms. |
+
+**Dots and zoom-out (2026-10-10):**
+
+| Decision | Why |
+| --- | --- |
+| Clicking a dot picks it: a ring on the dot and a small card (species, genus and "% sure", how long ago and in which district, which diseases that genus can carry, phone recording vs smart trap, and a "simulated demo data" line for seeded rows). The card follows the dot while panning and zooming; Escape, ×, or clicking elsewhere closes it. Hovering a dot shows a pointer cursor. | Makes each dot a real, individual report instead of texture. Hit-testing is done on the map canvas (nearest dot within its radius + 5 px), so no per-dot DOM elements. The card says the species is the closest match, since only the genus is reliable (see section 6). |
+| Clicking the button of the country you are already on zooms the map back out to the whole-country view and clears the city selection. | Quick way out of a city, without hunting for "all cities". |
+
 ## Change log
 - **2026-10-09/10:** Tiger schema and districts loaded; `/classify` service with mock phone; Snowflake set up over REST; dengue history and weather loaded; dengue forecast trained, back-tested and published to Tiger.
 - **2026-10-10:** Audio features and genus/species classifier trained; HumBug detector tried and rejected; tonality gate adopted; new pipeline wired into `/classify`; demo clips exported. This document started.
@@ -245,3 +283,7 @@ Decisions: one background `LISTEN` connection reconnects every 3 s on failure an
 - **2026-10-10:** New York (5 boroughs, `US`) added; West Nile positive pools simulated from real NYC temperature and forecast; all three diseases published to Tiger; 8 weeks of detections seeded; dashboard read endpoints and the live `/stream` added and verified; Cortex Search dropped (Gemini handles guidance).
 - **2026-10-10:** Frontend wired to the live backend through one Next.js adapter (`frontend/src/lib/backend.ts`); detections scattered inside real district outlines; timeline, districts and stream routes added; dashboard updates live; verified on all three maps.
 - **2026-10-10:** After PR #4: prevention district lookup fixed for real districts; Sample-button uploads flagged simulated; contract doc corrected.
+- **2026-10-10:** Dashboard map redesigned: full-bleed, state and district lines by zoom, hillshade topography, on-map district labels; city list and simulated box removed.
+- **2026-10-10:** Map: wheel locked to zoom over the map, lighter pinch zoom, colour key moved right, horizontal slide between countries with edge arrows.
+- **2026-10-10:** Dashboard is now a full-screen map; forecast and actions in a docked card; Leaflet credit and zoom restyled; smoother slide.
+- **2026-10-10:** Dots are clickable (info card); the current country's button zooms back out.

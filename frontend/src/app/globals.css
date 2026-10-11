@@ -64,17 +64,6 @@ body {
 /* Dashboard map: black world, flat gray country, so the red dots are the only colour. */
 .risk-map.leaflet-container {
   background: #000;
-  border: 1px solid rgba(236, 230, 218, 0.2);
-  border-radius: 2px;
-}
-.risk-map .leaflet-control-attribution {
-  background: rgba(19, 17, 15, 0.75);
-  color: rgba(236, 230, 218, 0.55);
-  font-family: "IBM Plex Mono", var(--font-geist-mono), monospace;
-  font-size: 10px;
-}
-.risk-map .leaflet-control-attribution a {
-  color: rgba(236, 230, 218, 0.75);
 }
 .risk-map .leaflet-bar,
 .risk-map .leaflet-bar a {
@@ -123,6 +112,84 @@ body {
 }
 .risk-map .city-label--data .city-dot {
   background: #f07636;
+}
+
+.risk-map .district-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 6px;
+  border: 1px solid rgba(236, 230, 218, 0.25);
+  border-radius: 2px;
+  background: rgba(19, 17, 15, 0.78);
+  pointer-events: auto;
+  white-space: nowrap;
+  cursor: pointer;
+  color: rgba(236, 230, 218, 0.9);
+  font: 500 11px "IBM Plex Mono", var(--font-geist-mono), monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.risk-map .district-label:hover,
+.risk-map .district-label--selected {
+  border-color: #f07636;
+  color: #fff;
+}
+.risk-map .district-score {
+  font-weight: 700;
+}
+
+.risk-map .dot-tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 460;
+  width: 240px;
+  padding: 10px 12px 9px;
+  border: 1px solid rgba(236, 230, 218, 0.3);
+  border-radius: 2px;
+  background: rgba(19, 17, 15, 0.92);
+  backdrop-filter: blur(6px);
+  color: #ece6da;
+  font: 500 11px/1.45 "IBM Plex Mono", var(--font-geist-mono), monospace;
+  cursor: default;
+}
+.risk-map .dot-tip-title {
+  font: 400 22px/1.1 "Bebas Neue", var(--font-geist-sans), sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f07636;
+  padding-right: 18px;
+}
+.risk-map .dot-tip-sub {
+  color: rgba(236, 230, 218, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+.risk-map .dot-tip-fine {
+  margin-top: 4px;
+  color: rgba(236, 230, 218, 0.5);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.risk-map .dot-tip-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  border: 0;
+  background: none;
+  color: rgba(236, 230, 218, 0.7);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.risk-map .dot-tip-close:hover {
+  color: #fff;
 }
 
 @keyframes fadein {

@@ -319,10 +319,15 @@ export async function classify(audio: Blob, country: Country, district: string, 
   form.append("device", meta.device || "web");
   if (audio.type) form.append("mime", audio.type);
   const r = await upstream<UpClassify>("/classify", { method: "POST", body: form }, 30_000);
+  // The genus call is the reliable one and decides the diseases; the species is only a closest match
+  // and can come from another genus ("Aedes albopictus" under an Anopheles call). Show the closest
+  // species within the called genus, or none (the screen then shows the genus only).
+  const inGenus = (s: string | null | undefined) => !!s && !!r.genus && s.split(" ")[0].toLowerCase() === r.genus;
+  const species = inGenus(r.species) ? r.species : (r.top3 ?? []).find((t) => inGenus(t.species))?.species ?? null;
   return {
     detection_id: r.detection_id,
     is_mosquito: r.is_mosquito,
-    species: r.species,
+    species,
     genus: r.genus,
     confidence: r.confidence ?? 0,
     top3: (r.top3 ?? []).map((t) => ({ species: t.species, probability: t.p })),

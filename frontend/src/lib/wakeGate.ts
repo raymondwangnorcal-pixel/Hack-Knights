@@ -87,6 +87,15 @@ export function assessSpectrum(db: ArrayLike<number>, hzPerBin: number, options:
   const hi = bin(o.bandHighHz);
   let k = lo;
   for (let i = lo; i <= hi; i++) if (db[i] > db[k]) k = i;
+  // Real buzzes (and small phone speakers) often make the 2x overtone louder than the wingbeat
+  // itself. If the loudest peak has a near-equal partner at half its pitch that is still in the
+  // band, that partner is the wingbeat: judge the tone from there.
+  const kHalf0 = Math.round(k / 2);
+  if (kHalf0 >= lo && maxDbNear(kHalf0, 1) > db[k] - o.subRejectDb) {
+    let best = Math.max(lo, kHalf0 - 1);
+    for (let i = best; i <= Math.min(hi, kHalf0 + 1); i++) if (db[i] > db[best]) best = i;
+    k = best;
+  }
   const f0 = k * hzPerBin;
   const peakDb = db[k];
 

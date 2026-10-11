@@ -87,6 +87,16 @@ function buzz(seconds, f0, peakDb, { burstOn = 0, burstEvery = 1 } = {}) {
   });
 }
 
+/** A buzz whose 2x overtone is louder than the wingbeat itself, as real recordings on a phone speaker often are. */
+function overtoneBuzz(seconds, f0, peakDb) {
+  const amp = 10 ** (peakDb / 20);
+  return Float64Array.from({ length: seconds * SR }, (_, i) => {
+    const t = i / SR;
+    const ph = 2 * Math.PI * f0 * (1 + 0.01 * Math.sin(2 * Math.PI * 3 * t)) * t;
+    return amp * (0.25 * Math.sin(ph) + 0.6 * Math.sin(2 * ph) + 0.3 * Math.sin(3 * ph) + 0.15 * Math.sin(4 * ph));
+  });
+}
+
 /** Voice-like sound: a gliding low pitch with many overtones, in syllables. */
 function voice(seconds, peakDb) {
   const amp = 10 ** (peakDb / 20);
@@ -122,6 +132,13 @@ test("a buzz that drifts in and out (0.7 s bursts, like the sample clips) still 
   for (const f0 of [450, 600, 800]) {
     const t = firstTrigger(mix(buzz(6, f0, -30, { burstOn: 0.7, burstEvery: 1.1 }), pinkNoise(6, -55, f0)));
     assert.ok(t !== null && t < 4, `${f0} Hz triggered at ${t}`);
+  }
+});
+
+test("a buzz whose overtone is louder than its wingbeat still wakes the gate", () => {
+  for (const f0 of [380, 480]) {
+    const t = firstTrigger(mix(overtoneBuzz(4, f0, -30), pinkNoise(4, -55, f0)));
+    assert.ok(t !== null && t < 1.5, `${f0} Hz triggered at ${t}`);
   }
 });
 

@@ -164,7 +164,7 @@ export function StickyBar({
           <button onClick={onSponsors} className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
             Sponsors
           </button>
-          {/* How Mozzy was built: data, audio model, training, forecasts, databases and the Model API. */}
+          {/* How Culicid was built: data, audio model, training, forecasts, databases and the Model API. */}
           <Link href="/how-it-works" className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
             How it works
           </Link>

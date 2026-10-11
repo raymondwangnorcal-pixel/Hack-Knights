@@ -61,10 +61,12 @@ function useJitteredCount(annual: number): number | null {
 
 export function Intro({
   onPick,
+  onSponsors,
   side,
   onSide,
 }: {
   onPick: (side: IntroSide) => void;
+  onSponsors: () => void;
   side: IntroSide;
   onSide: (side: IntroSide) => void;
 }) {
@@ -86,6 +88,7 @@ export function Intro({
       <StickyBar
         trackId="intro-big-number"
         onPick={onPick}
+        onSponsors={onSponsors}
         side={side}
         onSide={onSide}
         counters={[

@@ -6,6 +6,7 @@ import { Intro } from "@/components/Intro";
 import { ListenScreen } from "@/components/ListenScreen";
 import { PreventionScreen } from "@/components/PreventionScreen";
 import { scrollToId } from "@/components/SmoothScroll";
+import { SponsorSection, ToSponsorsArrow, scrollToSponsors } from "@/components/SponsorTracks";
 
 // One full-screen landing page with two sides under the intro, switched by the header toggle.
 // "For you" is the live listening screen; "For prevention" (governments & nonprofits) is the live
@@ -75,10 +76,15 @@ function LandingView({ side, onChange }: { side: Side; onChange: (s: Side) => vo
     onChange(s);
     scrollToId("start");
   };
+  // The header's Sponsors tab: switch to the prevention side, then scroll to its sponsors section.
+  const toSponsors = () => {
+    onChange("prevention");
+    scrollToSponsors();
+  };
 
   return (
     <>
-      <Intro onPick={pick} side={side} onSide={onChange} />
+      <Intro onPick={pick} onSponsors={toSponsors} side={side} onSide={onChange} />
       {/* Both sides sit under the intro in its poster palette; the toggle lives in the pinned header. */}
       {side === "prevention" ? <PreventionSide /> : <YouSide />}
     </>
@@ -102,14 +108,19 @@ function YouSide() {
 }
 
 function PreventionSide() {
-  // Governments and nonprofits: live risk map, health-team actions and the forecast (was /dashboard).
+  // Governments and nonprofits: live risk map, health-team actions and the forecast (was /dashboard),
+  // then the sponsors section, reached by the "To sponsors" arrow at the bottom of the screen.
   return (
     <main
       id="start"
       className="flex min-h-[calc(100svh-52px)] flex-1 scroll-mt-[86px] flex-col gap-4 px-3 pt-3 pb-3 lg:scroll-mt-[52px] sm:px-3"
       style={{ backgroundColor: POSTER_BG, color: POSTER_INK, colorScheme: "dark" }}
     >
-      <PreventionScreen />
+      <div className="flex min-h-[calc(100svh-52px-24px)] flex-col gap-4">
+        <PreventionScreen />
+        <ToSponsorsArrow />
+      </div>
+      <SponsorSection />
     </main>
   );
 }

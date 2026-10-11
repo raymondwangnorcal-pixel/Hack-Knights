@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Spectrogram } from "@/components/Spectrogram";
 import classifyMock from "@/mocks/classify.json";
-import { WakeGate, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
+import { WakeGate, listMics, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
 import { readAutoSpeak, setAutoSpeak, speak as speakLine, stopSpeaking, subscribeAutoSpeak, unlockAudio } from "@/lib/voice";
 import { LANGUAGES } from "@/lib/languages";
 import { pickSpoken } from "@/lib/spoken";
@@ -32,7 +32,9 @@ const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif"
 const COND = { fontFamily: "'Roboto Condensed', var(--font-geist-sans), sans-serif" };
 const MONO = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
 
-const CLIP_SECONDS = 10;
+// Seconds recorded after the buzz is heard. The model scores 2 s windows, and on test clips its genus
+// accuracy was the same at 2–8 s, so 3 s keeps the wait short without losing anything.
+const CLIP_SECONDS = 3;
 // The picker offers Lagos and São Paulo; US (New York, from the backend) isn't on this screen yet.
 const CITY: Record<Country, string> = { NG: "Lagos", BR: "São Paulo", US: "New York" };
 const SAMPLE: Record<Country, string> = {
@@ -41,6 +43,7 @@ const SAMPLE: Record<Country, string> = {
   US: "/samples/aedes-aegypti.wav",
 };
 const PLACE_KEY = "mozzy-place";
+const MIC_KEY = "mozzy-mic"; // a mic the user picked by hand on this device
 
 type Stage = "idle" | "listening" | "recording" | "sample" | "uploading" | "result" | "error";
 type Place = { country: Country; district: string };
@@ -61,6 +64,20 @@ function parsePlace(raw: string | null): Place | null {
   }
 }
 const noSubscribe = () => () => {};
+function readMic(): string | null {
+  try {
+    return localStorage.getItem(MIC_KEY);
+  } catch {
+    return null;
+  }
+}
+function saveMic(id: string) {
+  try {
+    localStorage.setItem(MIC_KEY, id);
+  } catch {
+    // Blocked storage: the pick lasts until reload.
+  }
+}
 function savePlace(p: Place) {
   try {
     localStorage.setItem(PLACE_KEY, JSON.stringify(p));
@@ -101,6 +118,8 @@ export function ListenScreen() {
   // Keyed by place, detection, and language so stale advice never appears after a switch.
   const [prevention, setPrevention] = useState<{ key: string; data: PreventionResponse } | null>(null);
   const [preventionRefresh, setPreventionRefresh] = useState(0);
+  const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
+  const [mic, setMic] = useState<{ id: string; label: string; filter?: "off" | "on" | "unknown" } | null>(null); // the mic in use
 
   const gate = useRef<WakeGate | null>(null);
   const sampleCtx = useRef<AudioContext | null>(null);
@@ -143,7 +162,7 @@ export function ListenScreen() {
     if (!active) return;
     const id = setInterval(() => {
       setElapsed((performance.now() - startedAt.current) / 1000);
-      setLevel(frame.current?.bandRatio ?? 0);
+      setLevel(frame.current?.progress ?? 0); // how close the wake gate is to firing
     }, 200);
     return () => clearInterval(id);
   }, [active]);
@@ -229,7 +248,8 @@ export function ListenScreen() {
     }
   }
 
-  async function startListening() {
+  /** `micId`: a mic just picked in the menu; otherwise the last hand-picked one, else the laptop's own. */
+  async function startListening(micId?: string) {
     unlockAudio(); // inside the tap, so the result can speak later
     const id = ++run.current;
     releaseAudio();
@@ -237,8 +257,10 @@ export function ListenScreen() {
     try {
       const g = new WakeGate();
       gate.current = g;
-      await g.start((f) => (frame.current = f), () => onTrigger(id));
+      await g.start((f) => (frame.current = f), () => onTrigger(id), micId ?? readMic());
       if (id !== run.current) return g.stop();
+      setMic({ id: g.micId, label: g.micLabel, filter: g.voiceFilter });
+      listMics().then(setMics).catch(() => {});
       const an = makeAnalyser(g.context!);
       g.tap(an);
       setAnalyser(an);
@@ -381,6 +403,8 @@ export function ListenScreen() {
   }
 
   const district = risk[place.country].find((d) => d.district === place.district) ?? null;
+  // The sample clips run longer than a capture: while one plays, the picture and time axis fit it.
+  const windowSec = stage === "sample" && clip ? Math.max(CLIP_SECONDS, Math.ceil(clip.seconds)) : CLIP_SECONDS;
   const timer =
     (stage === "result" || stage === "uploading") && clip ? clip.seconds : stage === "recording" ? Math.min(CLIP_SECONDS, elapsed) : active ? elapsed : 0;
 
@@ -448,7 +472,7 @@ export function ListenScreen() {
           <Spectrogram
             source={analyser}
             epoch={epoch}
-            windowSec={CLIP_SECONDS}
+            windowSec={windowSec}
             showPlayhead={active || replaying}
             playhead={() => (replaying && replay.current ? replay.current.currentTime : null)}
             className="h-[190px] w-full overflow-hidden sm:h-[260px] lg:h-[clamp(220px,30svh,320px)]"
@@ -456,7 +480,7 @@ export function ListenScreen() {
           {/* Centre button: start listening when idle, replay the clip once there's a result */}
           {!active && (
             <button
-              onClick={clip && stage === "result" ? toggleReplay : startListening}
+              onClick={clip && stage === "result" ? toggleReplay : () => startListening()}
               aria-label={clip && stage === "result" ? (replaying ? "Pause clip" : "Replay clip") : "Start listening"}
               className="absolute top-1/2 left-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#ECE6DA]/90 bg-[#13110F]/70 backdrop-blur-sm transition-transform hover:scale-105"
             >
@@ -489,14 +513,14 @@ export function ListenScreen() {
         </div>
         {/* Time axis */}
         <div className="relative mt-0 h-7 border-t border-[#ECE6DA]/40" style={COND} aria-hidden="true">
-          {Array.from({ length: CLIP_SECONDS + 1 }, (_, s) => (
+          {Array.from({ length: windowSec + 1 }, (_, s) => (
             <span
               key={s}
-              className={`absolute top-0 flex -translate-x-1/2 flex-col items-center text-[13px] opacity-80 sm:text-[15px] ${s % 2 ? "max-sm:hidden" : ""}`}
-              style={{ left: `${(s / CLIP_SECONDS) * 100}%` }}
+              className={`absolute top-0 flex -translate-x-1/2 flex-col items-center text-[13px] opacity-80 sm:text-[15px] ${s % 2 && windowSec > 6 ? "max-sm:hidden" : ""}`}
+              style={{ left: `${(s / windowSec) * 100}%` }}
             >
               <span className="h-2 w-px bg-[#ECE6DA]/50" />
-              <span className={s === 0 ? "translate-x-1/2" : s === CLIP_SECONDS ? "-translate-x-1/2" : ""}>{s}s</span>
+              <span className={s === 0 ? "translate-x-1/2" : s === windowSec ? "-translate-x-1/2" : ""}>{s}s</span>
             </span>
           ))}
         </div>
@@ -504,7 +528,7 @@ export function ListenScreen() {
         {/* Controls */}
         <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-[#ECE6DA]/20 pb-6">
           <button
-            onClick={active ? stop : startListening}
+            onClick={active ? stop : () => startListening()}
             aria-label={active ? "Stop" : "Start listening"}
             className="flex h-16 w-16 flex-none items-center justify-center rounded-full text-[#13110F] transition-transform hover:scale-105 sm:h-[76px] sm:w-[76px]"
             style={{ backgroundColor: ORANGE }}
@@ -527,6 +551,39 @@ export function ListenScreen() {
             >
               <WaveIcon /> Sample
             </button>
+          )}
+          {mic && (
+            <label className="relative flex basis-full items-center gap-1.5 text-[12px] tracking-[0.12em] uppercase opacity-70" style={MONO}>
+              <span>Mic: {mic.label || "Default microphone"}</span>
+              {mic.filter === "on" && (
+                <span style={{ color: AMBER }} title="This browser kept its voice filter on, which can quiet a steady buzz">
+                  · voice filter on
+                </span>
+              )}
+              {mic.filter === "off" && <span className="opacity-70">· raw audio</span>}
+              {mics.length > 1 && (
+                <>
+                  <span aria-hidden="true" className="opacity-60">▾</span>
+                  <select
+                    aria-label="Microphone"
+                    className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                    value={mic.id}
+                    disabled={stage === "recording" || stage === "uploading"}
+                    onChange={(e) => {
+                      saveMic(e.target.value);
+                      if (stage === "listening") startListening(e.target.value);
+                      else setMic({ id: e.target.value, label: mics.find((m) => m.deviceId === e.target.value)?.label ?? "" });
+                    }}
+                  >
+                    {mics.map((m) => (
+                      <option key={m.deviceId} value={m.deviceId}>
+                        {m.label || "Microphone"}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+            </label>
           )}
           {error && (
             <span className="basis-full text-sm" style={{ ...COND, color: RED }} role="alert">
@@ -670,7 +727,7 @@ function Status({ stage, level, countdown }: { stage: Stage; level: number; coun
       </span>
       {label}
       {stage === "listening" && (
-        // How much of what the mic hears sits in the wingbeat band
+        // Fills as the wake gate hears a steady wingbeat tone; full = capture starts
         <span className="flex h-4 items-end gap-[3px]" aria-hidden="true">
           {[0.15, 0.3, 0.45, 0.6, 0.75].map((t) => (
             <span

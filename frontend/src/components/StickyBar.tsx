@@ -65,12 +65,15 @@ export function StickyBar({
   trackId,
   counters,
   onPick,
+  onSponsors,
   side,
   onSide,
 }: {
   trackId: string;
   counters: [Counter, Counter];
   onPick: (side: Side) => void;
+  /** The Sponsors tab: jump to the sponsors section under "For prevention". */
+  onSponsors: () => void;
   /** Which side the page below is showing; drives the header toggle once you scroll. */
   side: Side;
   onSide: (side: Side) => void;
@@ -156,6 +159,9 @@ export function StickyBar({
           </button>
           <button onClick={() => onPick("prevention")} className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
             For prevention
+          </button>
+          <button onClick={onSponsors} className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
+            Sponsors
           </button>
           <button
             onClick={() => onPick("you")}

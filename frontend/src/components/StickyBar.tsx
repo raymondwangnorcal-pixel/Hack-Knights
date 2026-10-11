@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { RollingNumber } from "@/components/RollingNumber";
 
 // The intro's masthead, pinned to the top of the window. As the first screen scrolls away the
@@ -163,6 +164,10 @@ export function StickyBar({
           <button onClick={onSponsors} className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
             Sponsors
           </button>
+          {/* How Mozzy was built: data, audio model, training, forecasts, databases and the Model API. */}
+          <Link href="/how-it-works" className="hidden px-2 py-1 text-base tracking-wider whitespace-nowrap hover:underline sm:block">
+            How it works
+          </Link>
           <button
             onClick={() => onPick("you")}
             className="ml-1 rounded-sm px-4 py-1.5 text-base tracking-wider whitespace-nowrap text-[#13110F] transition-opacity hover:opacity-85"

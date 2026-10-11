@@ -14,6 +14,8 @@ const ORANGE = "#F07636";
 const DISPLAY = { fontFamily: "'Bebas Neue', var(--font-geist-sans), sans-serif" };
 const COND = { fontFamily: "'Roboto Condensed', var(--font-geist-sans), sans-serif" };
 const MONO = { fontFamily: "'IBM Plex Mono', var(--font-geist-mono), monospace" };
+/** Start delay for the For prevention fill-in; has no effect outside that page (see .pv in globals.css). */
+const pvDelay = (ms: number) => ({ "--pv-d": `${ms}ms` }) as React.CSSProperties;
 
 interface PreventionCardProps {
   title?: string;
@@ -45,7 +47,12 @@ export function PreventionCard({
   const voice = useVoiceState();
   const speaking = voice === "playing";
   return (
-    <section aria-label={`${title} steps`} className="flex min-w-0 flex-col border border-[#ECE6DA]/20 px-5 pt-6 pb-6 sm:px-8 sm:pt-8">
+    <section
+      aria-label={`${title} steps`}
+      data-pv="right"
+      style={pvDelay(250)}
+      className="flex min-w-0 flex-col border border-[#ECE6DA]/20 px-5 pt-6 pb-6 sm:px-8 sm:pt-8"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ECE6DA]/20 pb-5">
         <h2 className="text-[40px] leading-none tracking-wide uppercase sm:text-[48px]" style={{ ...DISPLAY, color: ORANGE }}>
           {title}
@@ -93,8 +100,8 @@ export function PreventionCard({
             </p>
           )}
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-            {data.stats.map((s) => (
-              <div key={s.label} className="min-w-0">
+            {data.stats.map((s, i) => (
+              <div key={s.label} className="min-w-0" data-pv="up" style={pvDelay(650 + i * 70)}>
                 <dt className="text-[10px] tracking-[0.16em] uppercase opacity-55" style={MONO}>
                   {s.label}
                 </dt>
@@ -115,7 +122,7 @@ export function PreventionCard({
 
       <ol className="flex flex-col" lang={data?.language ?? "en"}>
         {(data?.actions ?? [null, null, null]).map((item, i) => (
-          <li key={item?.id ?? i} className="flex items-start gap-6 border-b border-[#ECE6DA]/20 py-6 sm:gap-8 sm:py-8">
+          <li key={item?.id ?? i} data-pv="up" style={pvDelay(950 + i * 140)} className="flex items-start gap-6 border-b border-[#ECE6DA]/20 py-6 sm:gap-8 sm:py-8">
             <span className="w-12 flex-none text-[44px] leading-none sm:text-[52px]" style={{ ...DISPLAY, color: ORANGE, opacity: item ? 1 : 0.35 }}>
               {String(i + 1).padStart(2, "0")}
             </span>

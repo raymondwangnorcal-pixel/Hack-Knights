@@ -16,11 +16,17 @@ interface RiskHeatMapProps {
   onSelect: (d: DistrictRisk) => void;
   onCitySelect: (c: City) => void;
   focus?: MapFocus | null;
+  /** Map height in px (default 520). */
+  height?: number;
 }
 
 export default function RiskHeatMap(props: RiskHeatMapProps) {
   if (!props.districts.length) {
-    return <div className="flex h-[520px] w-full items-center justify-center">No data</div>;
+    return (
+      <div className="flex w-full items-center justify-center" style={{ height: props.height ?? 520 }}>
+        No data
+      </div>
+    );
   }
   return <RiskHeatMapClient key={props.districts[0].country} {...props} />;
 }

@@ -13,6 +13,7 @@ interface RiskHeatMapClientProps {
   onSelect: (d: DistrictRisk) => void;
   onCitySelect: (c: City) => void;
   focus?: MapFocus | null;
+  height?: number;
 }
 
 // Leaflet internals used to move the view without its built-in 250ms zoom animation.
@@ -374,6 +375,7 @@ export default function RiskHeatMapClient({
   onSelect,
   onCitySelect,
   focus,
+  height = 520,
 }: RiskHeatMapClientProps) {
   const country = districts[0].country;
   return (
@@ -389,7 +391,7 @@ export default function RiskHeatMapClient({
       scrollWheelZoom={false}
       preferCanvas
       className="risk-map"
-      style={{ width: "100%", height: 520 }}
+      style={{ width: "100%", height }}
     >
       <StreetTiles />
       <SmoothWheelZoom />

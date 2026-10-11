@@ -121,11 +121,13 @@ export interface RecommendResponse {
   source: "gemini" | "mock";
 }
 
-/** POST /api/prevention: three household actions for the listening screen. */
+/** POST /api/prevention: three actions, for a household (listening screen) or a health team (For prevention). */
 export interface PreventionRequest {
   country: Country;
   district: string;
   language?: Language;
+  /** "household" (default; NG and BR) or "health_team" (NG, BR and US; grounded on risk and forecast). */
+  audience?: "household" | "health_team";
   detection?: {
     genus: Genus | null;
     confidence: number;
@@ -148,6 +150,8 @@ export interface PreventionResponse {
   basis: "local" | "general";
   context: string;
   language: Language;
+  /** health_team only: true when any input behind the plan is simulated demo data. */
+  is_simulated?: boolean;
 }
 
 /** POST /api/voice -> returns audio/mpeg bytes */

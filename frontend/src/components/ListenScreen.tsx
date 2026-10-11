@@ -6,6 +6,7 @@ import classifyMock from "@/mocks/classify.json";
 import { WakeGate, recordClip, type WakeGateFrame } from "@/lib/wakeGate";
 import { readAutoSpeak, setAutoSpeak, speak as speakLine, stopSpeaking, subscribeAutoSpeak, unlockAudio } from "@/lib/voice";
 import { LANGUAGES } from "@/lib/languages";
+import { pickSpoken } from "@/lib/spoken";
 import { DISEASE_LABEL, GENUS_INFO, carryInfo, listOr } from "@/lib/species";
 import type {
   ClassifyResponse,
@@ -357,27 +358,26 @@ export function ListenScreen() {
 
   const shownPrevention = prevention?.key === preventionKey ? prevention.data : null;
 
-  const canSpeak = voiced.includes(language);
-  // The action titles Codex's panel shows in the chosen language (same filter as before).
-  const spokenTitles = useMemo(
-    () => (shownPrevention ? shownPrevention.actions.filter((a) => !a.language || a.language === language).map((a) => a.title) : []),
-    [shownPrevention, language],
-  );
+  // Titles in the chosen language are read in its voice; untranslated ones in the English voice.
+  const spoken = useMemo(() => (shownPrevention ? pickSpoken(shownPrevention, language) : null), [shownPrevention, language]);
+  const voice = spoken?.voice ?? language;
+  const spokenTitles = useMemo(() => spoken?.titles ?? [], [spoken]);
+  const canSpeak = voiced.includes(voice);
 
   // Read the result aloud once per detection, as soon as its prevention actions are in.
   useEffect(() => {
     if (!autoSpeak || !canSpeak || !shownPrevention || !result?.is_mosquito || !spokenTitles.length) return;
     if (spokenFor.current === result.detection_id) return;
     spokenFor.current = result.detection_id;
-    speakLine(spokenLine(result, spokenTitles, language), language);
-  }, [autoSpeak, canSpeak, shownPrevention, result, language, spokenTitles]);
+    speakLine(spokenLine(result, spokenTitles, voice), voice);
+  }, [autoSpeak, canSpeak, shownPrevention, result, voice, spokenTitles]);
 
   function speak() {
     if (!shownPrevention || !spokenTitles.length) return;
     unlockAudio();
     // With a result: species + actions; before one: just the district's actions.
-    const text = result?.is_mosquito ? spokenLine(result, spokenTitles, language) : spokenTitles.join(language === "zh" ? "。" : ". ");
-    speakLine(text, language);
+    const text = result?.is_mosquito ? spokenLine(result, spokenTitles, voice) : spokenTitles.join(voice === "zh" ? "。" : ". ");
+    speakLine(text, voice);
   }
 
   const district = risk[place.country].find((d) => d.district === place.district) ?? null;
@@ -629,7 +629,9 @@ export function ListenScreen() {
         <p className="mt-auto pt-6 text-[15px] opacity-70" style={COND}>
           {!shownPrevention
             ? "Preparing advice for your district."
-            : shownPrevention.source === "gemini" ? "By Gemini" : "From Mozzy guidance"}
+            : `${shownPrevention.source === "gemini" ? "By Gemini" : "From Mozzy guidance"}${
+                spoken && !spoken.translated ? " · Translation unavailable, showing English" : ""
+              }`}
         </p>
       </section>
     </div>
@@ -703,6 +705,8 @@ function ResultRow({
   const riskLevel = score == null ? null : score >= 67 ? 2 : score >= 34 ? 1 : 0;
   const riskColor = riskLevel === 2 ? RED : riskLevel === 1 ? ORANGE : TEAL;
   const dim = { opacity: 0.4 };
+  // Risk near you stays out of the page until a clip has been identified (recorded or Sample).
+  const showRisk = result !== null;
   const pitchOnly = heard?.model_version?.startsWith("pitch-rule") ?? false;
   const demoNote = !result?.is_simulated
     ? null
@@ -718,7 +722,10 @@ function ResultRow({
         <span>{demoNote}</span>
       </p>
     )}
-    <div className="grid grid-cols-2 gap-y-6 pt-6 lg:grid-cols-4 lg:divide-x lg:divide-[#ECE6DA]/20" style={COND}>
+    <div
+      className={`grid grid-cols-2 gap-y-6 pt-6 lg:divide-x lg:divide-[#ECE6DA]/20 ${showRisk ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
+      style={COND}
+    >
       {/* Species */}
       <div className="flex flex-col gap-1.5 pr-4 lg:pr-5">
         <Label>Species</Label>
@@ -775,6 +782,7 @@ function ResultRow({
       </div>
 
       {/* Risk near you */}
+      {showRisk && (
       <div className="flex flex-col gap-1.5 pr-4 lg:px-5">
         <Label>Risk near you</Label>
         <span className="text-[22px] leading-tight sm:text-[26px]" style={{ color: riskColor, opacity: riskLevel == null ? 0.4 : 1 }}>
@@ -800,9 +808,12 @@ function ResultRow({
           </span>
         )}
       </div>
+      )}
 
       {/* Can carry */}
-      <div className="flex flex-col gap-1.5 pl-4 lg:pl-5 max-lg:border-l max-lg:border-[#ECE6DA]/20">
+      <div
+        className={`flex flex-col gap-1.5 lg:pl-5 ${showRisk ? "pl-4 max-lg:border-l max-lg:border-[#ECE6DA]/20" : "pr-4"}`}
+      >
         <Label>Can carry</Label>
         {carry?.main ? (
           <>

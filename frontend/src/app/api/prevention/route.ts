@@ -1,8 +1,14 @@
-import { mockRisk } from "@/lib/mockData";
-import { districtsById, getDetections } from "@/lib/backend";
+import { USE_MOCKS, mockForecast, mockRisk } from "@/lib/mockData";
+import { districtsById, getDetections, getForecast, getRisk } from "@/lib/backend";
 import { gatherPreventionContext, householdCandidates, preventionContextLine, type PreventionContext } from "@/lib/prevention";
+import { healthTeamCandidates, healthTeamContextLine, type HealthTeamContext } from "@/lib/healthTeam";
+import { buildHealthTeamPrompt } from "@/lib/healthTeamPrompt";
+import { withBuiltinTitles } from "@/lib/actionTranslations";
 import { parseLanguage, promptName } from "@/lib/languages";
-import type { Country, Detection, DetectionsResponse, Genus, PreventionAction, PreventionRequest, PreventionResponse } from "@/lib/types";
+import type {
+  Country, Detection, DetectionsResponse, ForecastResponse, Genus, Language, PreventionAction, PreventionRequest,
+  PreventionResponse, RiskResponse,
+} from "@/lib/types";
 
 const GENERA: Genus[] = ["aedes", "anopheles", "culex", "other"];
 const geminiCache = new Map<string, { expiresAt: number; actions: PreventionAction[] }>();
@@ -148,9 +154,153 @@ async function findDistrict(country: Country, name: string): Promise<{ district:
   }
 }
 
+// ---------- Health-team plan (For prevention side) ----------
+
+function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([work, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${label} timed out`)), ms))]);
+}
+
+// Same sources as /api/risk and /api/forecast: the Data/ML service when BUZZ_API_URL is set,
+// the sample data otherwise or when the service fails, so the card never blanks mid-demo.
+async function loadRisk(country: Country): Promise<RiskResponse> {
+  if (USE_MOCKS) return mockRisk(country);
+  try {
+    return await withTimeout(getRisk(country), 8000, "risk");
+  } catch (err) {
+    console.error("prevention: risk lookup failed, using the sample list", String(err));
+    return mockRisk(country);
+  }
+}
+
+async function loadForecast(district: string): Promise<ForecastResponse | null> {
+  if (USE_MOCKS) return mockForecast(district);
+  try {
+    return await withTimeout(getForecast(district), 8000, "forecast");
+  } catch (err) {
+    console.error("prevention: forecast lookup failed, using the sample forecast", String(err));
+    return mockForecast(district);
+  }
+}
+
+const numbersIn = (text: string): string[] => text.match(/\d+/g) ?? [];
+
+/** Checks Gemini's reply against the contract in healthTeamPrompt.ts; null when it doesn't fit. */
+function validateHealthTeamReply(generated: unknown, candidates: PreventionAction[], language: Language): PreventionAction[] | null {
+  const reply = generated as { ids?: unknown; translations?: unknown } | null;
+  const ids = reply?.ids;
+  if (!Array.isArray(ids) || ids.length !== 3 || new Set(ids).size !== 3 ||
+      !ids.includes(candidates[0].id) || !ids.every((id) => candidates.some((a) => a.id === id))) {
+    console.error("prevention (health team): Gemini picked invalid ids", JSON.stringify(ids), candidates.map((c) => c.id).join(","));
+    return null;
+  }
+  const chosen = (ids as string[]).map((id) => candidates.find((a) => a.id === id)!);
+  if (language === "en") return chosen;
+  const translations = reply?.translations;
+  if (!Array.isArray(translations) || translations.length !== 3) return null;
+  return chosen.map((original, i) => {
+    const t = translations[i];
+    if (t?.id !== original.id || typeof t.title !== "string" || typeof t.reason !== "string" ||
+        !t.title.trim() || !t.reason.trim() || t.title.length > 120 || t.reason.length > 700 ||
+        // Every number in the grounded reason must survive translation unchanged.
+        !numbersIn(original.reason).every((n) => numbersIn(t.reason).includes(n))) {
+      throw new Error("Invalid translation");
+    }
+    // Chemical text stays curated until country-specific translations have been reviewed.
+    return original.registryUrl ? { ...original, language: "en" as const } : { ...original, title: t.title.trim(), reason: t.reason.trim() };
+  });
+}
+
+async function chooseHealthTeamWithGemini(candidates: PreventionAction[], ctx: HealthTeamContext, language: Language) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  const cacheKey = JSON.stringify({ audience: "health_team", ...ctx, rainMm: ctx.rainMm === null ? null : Math.round(ctx.rainMm), language });
+  const cached = geminiCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.actions;
+  if (geminiPausedUntil > Date.now()) return null;
+  const model = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
+  try {
+    const base = process.env.GEMINI_API_BASE ?? "https://generativelanguage.googleapis.com";
+    const res = await fetch(`${base}/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: buildHealthTeamPrompt(candidates, ctx, promptName(language)) }] }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0.1, thinkingConfig: { thinkingLevel: "low" } },
+      }),
+      signal: AbortSignal.timeout(20000),
+      cache: "force-cache",
+      next: { revalidate: GEMINI_REUSE_S },
+    });
+    if (!res.ok) {
+      if (res.status === 429) geminiPausedUntil = Date.now() + 10 * 60_000;
+      console.error(`prevention (health team): Gemini returned ${res.status}`, (await res.text().catch(() => "")).slice(0, 500));
+      return null;
+    }
+    const data = await res.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("");
+    const actions = validateHealthTeamReply(JSON.parse(raw), candidates, language);
+    if (!actions) return null;
+    if (geminiCache.size >= 128) geminiCache.delete(geminiCache.keys().next().value!);
+    geminiCache.set(cacheKey, { expiresAt: Date.now() + 10 * 60_000, actions });
+    return actions;
+  } catch (err) {
+    console.error("prevention (health team): Gemini call failed", String(err));
+    return null;
+  }
+}
+
+async function healthTeamPlan(body: PreventionRequest): Promise<Response> {
+  if (body.country !== "NG" && body.country !== "BR" && body.country !== "US") {
+    return Response.json({ error: "Choose a supported district" }, { status: 400 });
+  }
+  const country = body.country;
+  const risk = await loadRisk(country);
+  const district = risk.districts.find((d) => d.district === body.district);
+  if (!district) return Response.json({ error: "Choose a supported district" }, { status: 400 });
+
+  const [forecast, rainMm, regionalGenus] = await Promise.all([
+    loadForecast(district.district),
+    recentRain(district.lat, district.lng),
+    prevalentGenus(country, district.district),
+  ]);
+  const weeks = [...(forecast?.weeks ?? [])].sort((a, b) => a.week_ahead - b.week_ahead);
+  const last = weeks[weeks.length - 1];
+  const ctx: HealthTeamContext = {
+    country,
+    district: district.district,
+    disease: forecast?.disease ?? district.main_disease,
+    riskScore: district.risk_score,
+    rank: district.rank,
+    districtCount: risk.districts.length,
+    detections7d: district.detections_7d,
+    cases14d: district.cases_14d,
+    forecast: weeks.length && last
+      ? { unit: forecast?.unit ?? "cases", week1: weeks[0].mid, week4: last.mid, low4: last.low, high4: last.high }
+      : null,
+    regionalGenus,
+    rainMm,
+    simulated: risk.is_simulated || !!forecast?.is_simulated,
+  };
+  const candidates = healthTeamCandidates(ctx);
+  const language = parseLanguage(body.language);
+  const chosen = await chooseHealthTeamWithGemini(candidates, ctx, language);
+  // Without Gemini, titles still come back translated from the built-in table.
+  const fallback = chosen ? null : withBuiltinTitles(candidates.slice(0, 3), language);
+  const response: PreventionResponse = {
+    actions: chosen ?? fallback!.actions,
+    source: chosen ? "gemini" : "rules",
+    basis: "local",
+    context: healthTeamContextLine(ctx),
+    language: chosen ? language : fallback!.language,
+    is_simulated: ctx.simulated,
+  };
+  return Response.json(response);
+}
+
 export async function POST(request: Request) {
   let body: PreventionRequest;
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
+  if (body?.audience === "health_team") return healthTeamPlan(body);
   if ((body.country !== "NG" && body.country !== "BR") || typeof body.district !== "string") {
     return Response.json({ error: "Choose a supported district" }, { status: 400 });
   }
@@ -171,12 +321,14 @@ export async function POST(request: Request) {
   const candidates = householdCandidates(ctx);
   const requestedLanguage = parseLanguage(body.language);
   const chosen = await chooseWithGemini(candidates, ctx, requestedLanguage);
+  // Without Gemini, titles still come back translated from the built-in table.
+  const fallback = chosen ? null : withBuiltinTitles(candidates.slice(0, 3), requestedLanguage);
   const response: PreventionResponse = {
-    actions: chosen ?? candidates.slice(0, 3),
+    actions: chosen ?? fallback!.actions,
     source: chosen ? "gemini" : "rules",
     basis: ctx.recordingGenus || ctx.regionalGenus ? "local" : "general",
     context: preventionContextLine(ctx),
-    language: chosen ? requestedLanguage : "en",
+    language: chosen ? requestedLanguage : fallback!.language,
   };
   return Response.json(response);
 }

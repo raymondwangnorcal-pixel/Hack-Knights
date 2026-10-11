@@ -395,11 +395,11 @@ export function ListenScreen() {
   };
 
   return (
-    <div className="grid flex-1 gap-3 lg:grid-cols-[minmax(0,1.62fr)_minmax(0,1fr)]">
+    <div className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-[minmax(0,1.62fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
       {/* ---------- Listening card ---------- */}
       <section
         aria-label="Listen for a mosquito"
-        className="flex min-w-0 flex-col border border-[#ECE6DA]/20 px-4 pt-4 pb-5 sm:px-7 sm:pt-6"
+        className="flex min-w-0 flex-col border border-[#ECE6DA]/20 px-4 pt-4 pb-5 sm:px-7 sm:pt-6 lg:min-h-0 lg:overflow-hidden lg:pt-5 lg:pb-4"
       >
         {/* Header: state · place · timer */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[#ECE6DA]/20 pb-4 sm:pb-5">
@@ -444,14 +444,14 @@ export function ListenScreen() {
         </div>
 
         {/* Spectrogram */}
-        <div className="relative mt-6">
+        <div className="relative mt-6 lg:mt-4 lg:flex lg:min-h-[110px] lg:flex-1 lg:flex-col">
           <Spectrogram
             source={analyser}
             epoch={epoch}
             windowSec={CLIP_SECONDS}
             showPlayhead={active || replaying}
             playhead={() => (replaying && replay.current ? replay.current.currentTime : null)}
-            className="h-[190px] w-full overflow-hidden sm:h-[260px] lg:h-[clamp(220px,30svh,320px)]"
+            className="h-[190px] w-full overflow-hidden sm:h-[260px] lg:h-auto lg:min-h-0 lg:flex-1"
           />
           {/* Centre button: start listening when idle, replay the clip once there's a result */}
           {!active && (
@@ -502,7 +502,7 @@ export function ListenScreen() {
         </div>
 
         {/* Controls */}
-        <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-[#ECE6DA]/20 pb-6">
+        <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-[#ECE6DA]/20 pb-6 lg:mt-4 lg:pb-4">
           <button
             onClick={active ? stop : startListening}
             aria-label={active ? "Stop" : "Start listening"}
@@ -542,7 +542,7 @@ export function ListenScreen() {
       {/* ---------- Prevention card ---------- */}
       <section
         aria-label="Prevention steps"
-        className="flex min-w-0 flex-col border border-[#ECE6DA]/20 px-5 pt-6 pb-6 sm:px-8 sm:pt-8"
+        className="flex min-w-0 flex-col border border-[#ECE6DA]/20 px-5 pt-6 pb-6 sm:px-8 sm:pt-8 lg:min-h-0 lg:overflow-hidden lg:pt-6 lg:pb-5"
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ECE6DA]/20 pb-5">
           <h2 className="text-[40px] leading-none tracking-wide uppercase sm:text-[48px]" style={{ ...DISPLAY, color: ORANGE }}>
@@ -597,9 +597,9 @@ export function ListenScreen() {
             : "Checking local mosquito data…"}
         </p>
 
-        <ol className="flex flex-col" lang={shownPrevention?.language ?? "en"}>
+        <ol className="flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-y-auto" data-lenis-prevent lang={shownPrevention?.language ?? "en"}>
           {(shownPrevention?.actions ?? [null, null, null]).map((item, i) => (
-            <li key={item?.id ?? i} className="flex items-start gap-6 border-b border-[#ECE6DA]/20 py-6 sm:gap-8 sm:py-8">
+            <li key={item?.id ?? i} className="flex items-start gap-6 border-b border-[#ECE6DA]/20 py-6 sm:gap-8 sm:py-8 lg:py-5">
               <span
                 className="w-12 flex-none text-[44px] leading-none sm:text-[52px]"
                 style={{ ...DISPLAY, color: ORANGE, opacity: item ? 1 : 0.35 }}
@@ -717,13 +717,13 @@ function ResultRow({
   return (
     <>
     {demoNote && (
-      <p className="mt-5 flex items-start gap-2.5 border border-[#F2B544]/35 bg-[#F2B544]/[0.07] px-3 py-2 text-[14px] leading-snug" style={COND} role="status">
+      <p className="mt-5 flex items-start gap-2.5 border border-[#F2B544]/35 bg-[#F2B544]/[0.07] px-3 py-2 text-[14px] leading-snug lg:mt-3" style={COND} role="status">
         <span className="mt-[5px] h-2 w-2 flex-none rounded-full" style={{ backgroundColor: AMBER }} aria-hidden="true" />
         <span>{demoNote}</span>
       </p>
     )}
     <div
-      className={`grid grid-cols-2 gap-y-6 pt-6 lg:divide-x lg:divide-[#ECE6DA]/20 ${showRisk ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
+      className={`grid grid-cols-2 gap-y-6 pt-6 lg:pt-4 lg:divide-x lg:divide-[#ECE6DA]/20 ${showRisk ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
       style={COND}
     >
       {/* Species */}

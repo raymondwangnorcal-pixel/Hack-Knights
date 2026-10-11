@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BuzzTracker, assessSpectrum } from "./wakeGate.ts";
+import { BuzzTracker, assessSpectrum, isBuiltInMic } from "./wakeGate.ts";
 
 // Simulates what the browser's AnalyserNode hands the gate (2048-point Blackman FFT, 0.3 smoothing,
 // dB per bin) for synthetic audio at 48 kHz, checked 100 times a second like the live gate.
@@ -135,4 +135,13 @@ test("talking near the phone does not wake the gate", () => {
 
 test("a fan or fridge hum does not wake the gate", () => {
   assert.equal(firstTrigger(mix(hum(10, -25), pinkNoise(10, -50, 5))), null);
+});
+
+test("the laptop's own mic is preferred over an iPhone, AirPods or a virtual device", () => {
+  for (const label of ["MacBook Pro Microphone (Built-in)", "MacBook Air Microphone", "Built-in Microphone", "Microphone Array (Internal)"]) {
+    assert.ok(isBuiltInMic(label), label);
+  }
+  for (const label of ["iPhone Microphone", "Raymond's iPhone Microphone (Continuity)", "AirPods Pro", "BlackHole 2ch (Virtual)", "Default - iPhone Microphone"]) {
+    assert.ok(!isBuiltInMic(label), label);
+  }
 });

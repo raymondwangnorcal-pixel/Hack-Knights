@@ -152,6 +152,49 @@ export class BuzzTracker {
   }
 }
 
+// ---- Choosing the microphone ----
+// getUserMedia with no device takes the system default input, and macOS can make that an iPhone
+// (Continuity microphone), AirPods or a virtual device. We want the laptop's own mic unless the
+// user picked something else.
+
+const RAW_AUDIO = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+
+/** True for a laptop's own mic ("MacBook Pro Microphone", "Built-in Microphone", "Internal …"). */
+export function isBuiltInMic(label: string): boolean {
+  return /macbook|built-?in|internal/i.test(label) && !/iphone|ipad|continuity|airpods|bluetooth|virtual/i.test(label);
+}
+
+export async function listMics(): Promise<MediaDeviceInfo[]> {
+  if (!navigator.mediaDevices?.enumerateDevices) return [];
+  const all = await navigator.mediaDevices.enumerateDevices();
+  // Chrome adds "default" and "communications" aliases of a real device; list each device once.
+  return all.filter((d) => d.kind === "audioinput" && d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications");
+}
+
+/** Opens `preferredId` if given and still present, else the laptop's built-in mic when there is one, else the default. */
+export async function openMic(preferredId?: string | null): Promise<MediaStream> {
+  if (preferredId) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: { ...RAW_AUDIO, deviceId: { exact: preferredId } } });
+    } catch (e) {
+      // Unplugged or renamed: fall back below. A permission refusal must still surface.
+      if (e instanceof DOMException && e.name === "NotAllowedError") throw e;
+    }
+  }
+  // Device labels only appear after permission, so open the default first, then switch if needed.
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: RAW_AUDIO });
+  if (isBuiltInMic(stream.getAudioTracks()[0]?.label ?? "")) return stream;
+  const builtIn = (await listMics()).find((d) => isBuiltInMic(d.label));
+  if (!builtIn) return stream;
+  try {
+    const own = await navigator.mediaDevices.getUserMedia({ audio: { ...RAW_AUDIO, deviceId: { exact: builtIn.deviceId } } });
+    stream.getTracks().forEach((t) => t.stop());
+    return own;
+  } catch {
+    return stream;
+  }
+}
+
 export class WakeGate {
   private ctx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
@@ -164,11 +207,18 @@ export class WakeGate {
     this.opts = { ...DEFAULTS, ...opts };
   }
 
-  async start(onFrame: (f: WakeGateFrame) => void, onTrigger: () => void) {
-    // Turn OFF browser processing: noise suppression can filter out wingbeat frequencies.
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-    });
+  /** Name of the mic actually in use, e.g. "MacBook Pro Microphone (Built-in)". */
+  get micLabel(): string {
+    return this.stream?.getAudioTracks()[0]?.label ?? "";
+  }
+
+  get micId(): string {
+    return this.stream?.getAudioTracks()[0]?.getSettings().deviceId ?? "";
+  }
+
+  async start(onFrame: (f: WakeGateFrame) => void, onTrigger: () => void, micId?: string | null) {
+    // Browser processing stays OFF (noise suppression can filter out wingbeat frequencies).
+    this.stream = await openMic(micId);
     this.ctx = new AudioContext();
     // Safari (and Chrome when the permission prompt eats the tap) can create the context suspended;
     // a suspended context hands the analyser silence, so the gate and spectrogram see nothing.
